@@ -54,3 +54,4 @@ Operates in **Provider Mode** when `activeRole === 'PROVIDER'`:
 | :--- | :--- | :--- |
 | **Device Frame Simulator** | `App.tsx` | • **Phone Shell Toggle**: Switches between realistic iPhone/Android device bezel (with notch and home indicator) and full-width responsive mode.<br/>• **One-Click Role Switcher**: Quick pill in top bar allowing instantaneous toggling between `CUSTOMER` and `PROVIDER` views for reviewers. |
 | **Bottom Navigation Tabs** | `App.tsx` | • **Dynamic Navigation**: Automatically switches navigation items based on active role:<br/>- *Customer*: Discover, Bookings, Profile.<br/>- *Provider*: Cockpit, Schedule, Earnings, Account. |
+
