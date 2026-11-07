@@ -76,3 +76,4 @@
 | **26** | **Granular Permissions** | Explicit permission guards for KYC approval, service publishing, refund processing, and payout disbursements. |
 | **27** | **Executive KPI Dashboard** | Live metrics: Total & Completed Bookings, Cancellation Rate, Gross Merchandise Value (GMV), 5% Platform Revenue, Net Provider Earnings, and Pending Payouts. |
 | **28** | **Promotions Engine** | Native support for promotional promo codes, referral discounts, sponsored provider badges, and seasonal banners. |
+
