@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans select-none antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Custom scrollbars for clean mobile appearance */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, #65B32E 0%, #4B8B21 100%);
+}
+
+.charcoal-gradient {
+  background: linear-gradient(145deg, #18191E 0%, #0E0F12 100%);
+}
+

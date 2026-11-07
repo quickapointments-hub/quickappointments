@@ -1,0 +1,27 @@
+{
+  "name": "quick-appointments-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quick Appointments — Enterprise Multi-Role Appointment Booking Platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "start:backend": "npm --workspace=packages/backend-api run dev",
+    "start:admin": "npm --workspace=packages/admin-web run dev",
+    "start:mobile": "npm --workspace=packages/customer-provider-mobile run dev"
+  },
+  "keywords": [
+    "appointment-booking",
+    "react-native",
+    "express",
+    "prisma",
+    "vite",
+    "tailwind"
+  ],
+  "author": "Quick Appointments Engineering",
+  "license": "UNLICENSED"
+}
+

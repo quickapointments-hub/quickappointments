@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-slate-50 text-slate-900;
+  }
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, #65B32E 0%, #4E8E23 100%);
+}
+
+.dark-card {
+  background: #111114;
+}
+
