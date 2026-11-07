@@ -7,6 +7,7 @@ export const BookingsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refundMsg, setRefundMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadBookings();
@@ -21,6 +22,20 @@ export const BookingsPage: React.FC = () => {
       console.error('Failed to load bookings:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefund = async (bookingId: string) => {
+    if (!window.confirm('Process 100% refund for this booking? Amount will be returned to customer within 48 hours.')) {
+      return;
+    }
+    try {
+      await api.processRefund(bookingId, 'Admin initiated 100% customer refund');
+      setRefundMsg('100% refund processed successfully! Booking status updated to CANCELLED.');
+      await loadBookings();
+      setTimeout(() => setRefundMsg(null), 4000);
+    } catch (err: any) {
+      alert(`Refund failed: ${err.message}`);
     }
   };
 
@@ -52,6 +67,13 @@ export const BookingsPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {refundMsg && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span>{refundMsg}</span>
+        </div>
+      )}
 
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
@@ -96,12 +118,13 @@ export const BookingsPage: React.FC = () => {
                 <th className="px-6 py-3.5">Appointment Slot</th>
                 <th className="px-6 py-3.5">Financial Breakdown</th>
                 <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     No appointments match your active filter.
                   </td>
                 </tr>
@@ -153,6 +176,18 @@ export const BookingsPage: React.FC = () => {
                         {b.status === 'CANCELLED' && <XCircle className="w-3 h-3 text-rose-600" />}
                         {b.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {b.status === 'CONFIRMED' ? (
+                        <button
+                          onClick={() => handleRefund(b.id)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 transition-all shadow-sm"
+                        >
+                          100% Refund
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-300">—</span>
+                      )}
                     </td>
                   </tr>
                 ))

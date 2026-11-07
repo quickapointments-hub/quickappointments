@@ -105,6 +105,14 @@ class ApiClient {
     });
   }
 
+  // 100% Refund Processor (48-hr SLA)
+  async processRefund(bookingId: string, reason?: string) {
+    return this.request('/payments/refund', {
+      method: 'POST',
+      body: JSON.stringify({ bookingId, reason: reason || 'Admin authorized full refund' }),
+    });
+  }
+
   // Audit Logs
   async getAuditLogs() {
     return this.request('/admin/audit-logs');

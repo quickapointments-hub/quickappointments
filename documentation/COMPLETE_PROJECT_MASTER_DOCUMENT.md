@@ -258,3 +258,4 @@ From the workspace root (`E:\Bizools\Qucik Appoptiment`):
 1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/ugxgtgvykauyydxoqouz).
 2. Paste and run **[`database-migrations/run_supabase_migration.sql`](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/run_supabase_migration.sql)**.
 3. All 21 clean tables, triggers, storage buckets (`kyc-documents`, `service-images`, `avatars`), and idempotent RLS policies are created instantly with **0% mock data**.
+
