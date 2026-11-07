@@ -1,15 +1,31 @@
 -- ============================================================================
--- QUICK APPOINTMENTS — COMPLETE ALL-IN-ONE SUPABASE MIGRATION SCRIPT
--- Paste and run this script in your Supabase Project -> SQL Editor
+-- QUICK APPOINTMENTS — COMPLETE CLEAN SUPABASE PRODUCTION SETUP (ZERO SEED DATA)
+-- Platform: Supabase (PostgreSQL 15+)
 -- Project ID: ugxgtgvykauyydxoqouz (Singapore ap-southeast-1)
+-- Description: Sets up all 21 production tables, auto-updated triggers,
+--              concurrency indexes, Supabase storage buckets, and RLS security.
+--              Contains ZERO dummy users, mock providers, or test bookings.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- STEP 1: EXTENSIONS & TABLES (DDL)
+-- STEP 1: EXTENSIONS & UTILITIES
 -- ----------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ----------------------------------------------------------------------------
+-- STEP 2: CORE TABLES (DDL)
+-- ----------------------------------------------------------------------------
+
+-- 1. Users
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone VARCHAR(20) UNIQUE NOT NULL,
@@ -22,6 +38,12 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
+CREATE TRIGGER trg_users_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 2. User Roles
 CREATE TABLE IF NOT EXISTS user_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -29,7 +51,10 @@ CREATE TABLE IF NOT EXISTS user_roles (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, role)
 );
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role);
 
+-- 3. OTP Verifications
 CREATE TABLE IF NOT EXISTS otp_verifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -39,7 +64,9 @@ CREATE TABLE IF NOT EXISTS otp_verifications (
     is_used BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_otp_lookup ON otp_verifications(phone, is_used);
 
+-- 4. User Sessions
 CREATE TABLE IF NOT EXISTS user_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -49,7 +76,9 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
 
+-- 5. Customer Profiles
 CREATE TABLE IF NOT EXISTS customer_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -62,6 +91,12 @@ CREATE TABLE IF NOT EXISTS customer_profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_customer_profiles_updated_at ON customer_profiles;
+CREATE TRIGGER trg_customer_profiles_updated_at
+BEFORE UPDATE ON customer_profiles
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 6. Provider Profiles
 CREATE TABLE IF NOT EXISTS provider_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -83,7 +118,14 @@ CREATE TABLE IF NOT EXISTS provider_profiles (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_provider_search ON provider_profiles(city, verification_status, is_accepting_bookings);
 
+DROP TRIGGER IF EXISTS trg_provider_profiles_updated_at ON provider_profiles;
+CREATE TRIGGER trg_provider_profiles_updated_at
+BEFORE UPDATE ON provider_profiles
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 7. Provider Documents (KYC)
 CREATE TABLE IF NOT EXISTS provider_documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
@@ -93,7 +135,9 @@ CREATE TABLE IF NOT EXISTS provider_documents (
     is_verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_provider_docs ON provider_documents(provider_id);
 
+-- 8. Provider Working Hours & Breaks
 CREATE TABLE IF NOT EXISTS provider_working_hours (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
@@ -105,7 +149,9 @@ CREATE TABLE IF NOT EXISTS provider_working_hours (
     break_end VARCHAR(10),
     UNIQUE(provider_id, day_of_week)
 );
+CREATE INDEX IF NOT EXISTS idx_working_hours ON provider_working_hours(provider_id, day_of_week);
 
+-- 9. Categories
 CREATE TABLE IF NOT EXISTS categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL,
@@ -119,6 +165,12 @@ CREATE TABLE IF NOT EXISTS categories (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_categories_updated_at ON categories;
+CREATE TRIGGER trg_categories_updated_at
+BEFORE UPDATE ON categories
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 10. Master Services
 CREATE TABLE IF NOT EXISTS services (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
@@ -132,7 +184,14 @@ CREATE TABLE IF NOT EXISTS services (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_services_cat ON services(category_id, is_active);
 
+DROP TRIGGER IF EXISTS trg_services_updated_at ON services;
+CREATE TRIGGER trg_services_updated_at
+BEFORE UPDATE ON services
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 11. Provider Custom Service Rates
 CREATE TABLE IF NOT EXISTS provider_service_rates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
@@ -143,6 +202,7 @@ CREATE TABLE IF NOT EXISTS provider_service_rates (
     UNIQUE(provider_id, service_id)
 );
 
+-- 12. Concurrency Slot Reservations (10-minute hold mutex)
 CREATE TABLE IF NOT EXISTS slot_reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
@@ -155,9 +215,10 @@ CREATE TABLE IF NOT EXISTS slot_reservations (
     is_released BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_slot_reservations_lookup 
-ON slot_reservations(provider_id, date, start_time, is_released);
+CREATE INDEX IF NOT EXISTS idx_slot_concurrency ON slot_reservations(provider_id, date, start_time, is_released);
+CREATE INDEX IF NOT EXISTS idx_slot_expiry ON slot_reservations(expires_at, is_released);
 
+-- 13. Master Bookings
 CREATE TABLE IF NOT EXISTS bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_ref VARCHAR(50) UNIQUE NOT NULL,
@@ -181,9 +242,15 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_bookings_provider_date ON bookings(provider_id, date);
-CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_schedule ON bookings(provider_id, date, start_time);
+CREATE INDEX IF NOT EXISTS idx_bookings_cust ON bookings(customer_id);
 
+DROP TRIGGER IF EXISTS trg_bookings_updated_at ON bookings;
+CREATE TRIGGER trg_bookings_updated_at
+BEFORE UPDATE ON bookings
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 14. Booking Status History
 CREATE TABLE IF NOT EXISTS booking_status_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -192,7 +259,9 @@ CREATE TABLE IF NOT EXISTS booking_status_history (
     changed_by VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_history_booking ON booking_status_history(booking_id);
 
+-- 15. Payment Transactions
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE RESTRICT,
@@ -204,7 +273,9 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     raw_payload JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_pay_tx_booking ON payment_transactions(booking_id);
 
+-- 16. Provider Earnings Ledger
 CREATE TABLE IF NOT EXISTS provider_earnings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE RESTRICT,
@@ -217,7 +288,9 @@ CREATE TABLE IF NOT EXISTS provider_earnings (
     settled_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_earnings_prov ON provider_earnings(provider_id);
 
+-- 17. Commission Settings
 CREATE TABLE IF NOT EXISTS commission_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type VARCHAR(30) DEFAULT 'PERCENTAGE' CHECK (type IN ('PERCENTAGE', 'FIXED')),
@@ -229,6 +302,7 @@ CREATE TABLE IF NOT EXISTS commission_settings (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 18. Notifications
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -239,7 +313,9 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
 
+-- 19. Admin Users
 CREATE TABLE IF NOT EXISTS admin_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -248,6 +324,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 20. Audit Logs
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -258,7 +335,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address VARCHAR(50),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 
+-- 21. System Settings
 CREATE TABLE IF NOT EXISTS system_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key VARCHAR(100) UNIQUE NOT NULL,
@@ -267,125 +346,98 @@ CREATE TABLE IF NOT EXISTS system_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_system_settings_updated_at ON system_settings;
+CREATE TRIGGER trg_system_settings_updated_at
+BEFORE UPDATE ON system_settings
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ----------------------------------------------------------------------------
--- STEP 2: SEED DATA
+-- STEP 3: SUPABASE STORAGE BUCKETS
 -- ----------------------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public)
+VALUES 
+    ('kyc-documents', 'kyc-documents', false),
+    ('service-images', 'service-images', true),
+    ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
 DO $$
-DECLARE
-    v_admin_id UUID := gen_random_uuid();
-    v_cat1_id UUID := gen_random_uuid();
-    v_cat2_id UUID := gen_random_uuid();
-    v_cat3_id UUID := gen_random_uuid();
-    v_cat4_id UUID := gen_random_uuid();
-    v_serv1_id UUID := gen_random_uuid();
-    v_prov1_user_id UUID := gen_random_uuid();
-    v_prov1_id UUID := gen_random_uuid();
-    v_cust_user_id UUID := gen_random_uuid();
-    v_cust_id UUID := gen_random_uuid();
-    v_booking_id UUID := gen_random_uuid();
 BEGIN
-    -- SuperAdmin
-    INSERT INTO users (id, phone, email, full_name, is_active)
-    VALUES (v_admin_id, '+919999900001', 'admin@quickappointments.com', 'Super Administrator', TRUE)
-    ON CONFLICT (phone) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Service Images') THEN
+        CREATE POLICY "Public Read Service Images" ON storage.objects FOR SELECT USING (bucket_id = 'service-images');
+    END IF;
 
-    INSERT INTO user_roles (user_id, role)
-    SELECT v_admin_id, 'ADMIN' WHERE NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id = v_admin_id AND role = 'ADMIN');
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Avatars') THEN
+        CREATE POLICY "Public Read Avatars" ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
+    END IF;
 
-    INSERT INTO user_roles (user_id, role)
-    SELECT v_admin_id, 'SUPERADMIN' WHERE NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id = v_admin_id AND role = 'SUPERADMIN');
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated Users Upload Documents') THEN
+        CREATE POLICY "Authenticated Users Upload Documents" ON storage.objects FOR INSERT
+        WITH CHECK (bucket_id IN ('kyc-documents', 'avatars') AND auth.role() = 'authenticated');
+    END IF;
+END $$;
 
-    INSERT INTO admin_users (user_id, department, permissions)
-    VALUES (v_admin_id, 'Executive Operations', 'ALL')
-    ON CONFLICT (user_id) DO NOTHING;
+-- ----------------------------------------------------------------------------
+-- STEP 4: ROW LEVEL SECURITY (RLS)
+-- ----------------------------------------------------------------------------
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_working_hours ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE slot_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_earnings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-    -- 4 Launch Categories
-    INSERT INTO categories (id, name, slug, description, display_order, is_active)
-    VALUES 
-    (v_cat1_id, 'Salon & Grooming', 'salon-grooming', 'Haircuts, beard detailing, luxury facial care & styling', 1, TRUE),
-    (v_cat2_id, 'Healthcare & Wellness', 'healthcare-wellness', 'Certified doctors, physiotherapy, holistic therapy & nutrition', 2, TRUE),
-    (v_cat3_id, 'Home Repairs & AC Services', 'home-repairs-ac', 'Master technicians for HVAC, electrical, plumbing & maintenance', 3, TRUE),
-    (v_cat4_id, 'Auto Care & Detailing', 'auto-care-detailing', 'Professional foam wash, ceramic polish & mechanical tune-up', 4, TRUE)
-    ON CONFLICT (slug) DO NOTHING;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Active Categories') THEN
+        CREATE POLICY "Public Read Active Categories" ON categories FOR SELECT USING (is_active = true);
+    END IF;
 
-    -- Services
-    INSERT INTO services (id, category_id, name, slug, description, duration_minutes, base_price, is_active)
-    VALUES
-    (v_serv1_id, v_cat1_id, 'Executive Haircut & Beard Sculpt', 'executive-haircut-beard', 'Precision styling, beard shaping, hot towel & wash', 45, 499.00, TRUE),
-    (gen_random_uuid(), v_cat1_id, 'Deep Cleanse Organic Facial', 'organic-facial', 'Pore cleansing, exfoliating peel and revitalizing mask', 60, 899.00, TRUE),
-    (gen_random_uuid(), v_cat1_id, 'Bridal & Groom Complete Spa', 'bridal-groom-spa', 'Full body rejuvenating massage, scrub and glow treatment', 120, 2499.00, TRUE),
-    (gen_random_uuid(), v_cat2_id, 'General Physician Consultation', 'gp-consultation', 'Comprehensive diagnostic review, vital checks & prescriptions', 30, 599.00, TRUE),
-    (gen_random_uuid(), v_cat2_id, 'Ergonomic Physiotherapy Session', 'ergonomic-physio', 'Targeted spine, neck and joint mobility therapy', 45, 799.00, TRUE),
-    (gen_random_uuid(), v_cat2_id, 'Clinical Nutrition & Diet Consultation', 'nutrition-diet-plan', 'Metabolic evaluation, custom diet chart & follow-up', 40, 650.00, TRUE),
-    (gen_random_uuid(), v_cat3_id, 'AC Comprehensive Deep Jet Service', 'ac-jet-service', 'Indoor & outdoor coil cleaning, pressure check & foam wash', 60, 699.00, TRUE),
-    (gen_random_uuid(), v_cat3_id, 'Complete Home Electrical Safety Inspection', 'electrical-safety-check', 'Circuit breaker diagnosis, earthing test & appliance audit', 60, 450.00, TRUE),
-    (gen_random_uuid(), v_cat3_id, 'Plumbing Leak Detection & Pipe Repair', 'plumbing-leak-repair', 'High-pressure line inspection, sealant & pipe replacement', 45, 399.00, TRUE),
-    (gen_random_uuid(), v_cat4_id, '3-Layer Ceramic Coating & Paint Seal', 'ceramic-coating', 'Hydrophobic protection, machine polish & scratch minimization', 180, 4999.00, TRUE),
-    (gen_random_uuid(), v_cat4_id, 'Interior Steam Clean & Odor Sterilization', 'interior-steam-clean', 'Upholstery shampooing, dashboard shine & ozone purification', 90, 1299.00, TRUE),
-    (gen_random_uuid(), v_cat4_id, 'Complete 30-Point Vehicle Health Inspection', 'vehicle-health-check', 'Brakes, fluid, battery, OBD scanner & suspension check', 60, 799.00, TRUE)
-    ON CONFLICT (slug) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Active Services') THEN
+        CREATE POLICY "Public Read Active Services" ON services FOR SELECT USING (is_active = true);
+    END IF;
 
-    -- Provider
-    INSERT INTO users (id, phone, full_name, is_active)
-    VALUES (v_prov1_user_id, '+919876500001', 'Vikram Sethi', TRUE)
-    ON CONFLICT (phone) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Approved Providers') THEN
+        CREATE POLICY "Public Read Approved Providers" ON provider_profiles FOR SELECT 
+        USING (verification_status = 'APPROVED' AND is_accepting_bookings = true);
+    END IF;
 
-    INSERT INTO user_roles (user_id, role)
-    VALUES (v_prov1_user_id, 'PROVIDER'), (v_prov1_user_id, 'CUSTOMER')
-    ON CONFLICT (user_id, role) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Read Provider Working Hours') THEN
+        CREATE POLICY "Public Read Provider Working Hours" ON provider_working_hours FOR SELECT USING (true);
+    END IF;
 
-    INSERT INTO provider_profiles (id, user_id, provider_type, business_name, city, address, verification_status, experience_years, rating_avg, rating_count, is_accepting_bookings)
-    VALUES (v_prov1_id, v_prov1_user_id, 'BUSINESS', 'Studio Precision Salon', 'Mumbai', 'Shop 14, High Street Mall, Bandra West', 'APPROVED', 8, 4.90, 142, TRUE)
-    ON CONFLICT (user_id) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Customers Manage Own Profile') THEN
+        CREATE POLICY "Customers Manage Own Profile" ON customer_profiles FOR ALL USING (auth.uid() = user_id);
+    END IF;
 
-    INSERT INTO provider_working_hours (provider_id, day_of_week, open_time, close_time, break_start, break_end, is_closed)
-    VALUES
-    (v_prov1_id, 1, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 2, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 3, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 4, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 5, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 6, '09:00', '19:00', '13:00', '14:00', FALSE),
-    (v_prov1_id, 0, '09:00', '18:00', '13:00', '14:00', TRUE)
-    ON CONFLICT (provider_id, day_of_week) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Customers View Own Bookings') THEN
+        CREATE POLICY "Customers View Own Bookings" ON bookings FOR SELECT 
+        USING (customer_id IN (SELECT id FROM customer_profiles WHERE user_id = auth.uid()));
+    END IF;
 
-    INSERT INTO provider_service_rates (provider_id, service_id, custom_price, is_active)
-    VALUES (v_prov1_id, v_serv1_id, 499.00, TRUE)
-    ON CONFLICT (provider_id, service_id) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Customers Hold Slot Reservations') THEN
+        CREATE POLICY "Customers Hold Slot Reservations" ON slot_reservations FOR ALL 
+        USING (customer_id IN (SELECT id FROM customer_profiles WHERE user_id = auth.uid()));
+    END IF;
 
-    -- Customer & Confirmed Booking
-    INSERT INTO users (id, phone, full_name, is_active)
-    VALUES (v_cust_user_id, '+919811122233', 'Pooja Verma', TRUE)
-    ON CONFLICT (phone) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Providers View Assigned Bookings') THEN
+        CREATE POLICY "Providers View Assigned Bookings" ON bookings FOR SELECT 
+        USING (provider_id IN (SELECT id FROM provider_profiles WHERE user_id = auth.uid()));
+    END IF;
 
-    INSERT INTO user_roles (user_id, role)
-    VALUES (v_cust_user_id, 'CUSTOMER')
-    ON CONFLICT (user_id, role) DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Providers Manage Working Hours') THEN
+        CREATE POLICY "Providers Manage Working Hours" ON provider_working_hours FOR ALL 
+        USING (provider_id IN (SELECT id FROM provider_profiles WHERE user_id = auth.uid()));
+    END IF;
 
-    INSERT INTO customer_profiles (id, user_id, city, default_address)
-    VALUES (v_cust_id, v_cust_user_id, 'Mumbai', 'Flat 402, Sea Breeze Apts, Bandra West')
-    ON CONFLICT (user_id) DO NOTHING;
-
-    INSERT INTO bookings (
-        id, booking_ref, customer_id, provider_id, service_id, status, 
-        date, start_time, end_time, service_price, tax_amount, total_amount, 
-        platform_commission, provider_earnings, payment_status, payment_method
-    )
-    VALUES (
-        v_booking_id, 'QA-2026-0001', v_cust_id, v_prov1_id, v_serv1_id, 'CONFIRMED',
-        CURRENT_DATE, '11:00', '12:00', 499.00, 25.00, 524.00,
-        50.00, 474.00, 'PAID', 'CASH_ON_SERVICE'
-    )
-    ON CONFLICT (booking_ref) DO NOTHING;
-
-    INSERT INTO provider_earnings (
-        provider_id, booking_id, gross_amount, commission_rate, platform_fee, net_earnings, is_settled
-    )
-    VALUES (
-        v_prov1_id, v_booking_id, 524.00, 10.00, 50.00, 474.00, FALSE
-    )
-    ON CONFLICT (booking_id) DO NOTHING;
-
-    INSERT INTO commission_settings (type, rate, is_active)
-    VALUES ('PERCENTAGE', 10.00, TRUE);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Providers View Own Earnings') THEN
+        CREATE POLICY "Providers View Own Earnings" ON provider_earnings FOR SELECT 
+        USING (provider_id IN (SELECT id FROM provider_profiles WHERE user_id = auth.uid()));
+    END IF;
 END $$;

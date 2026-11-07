@@ -138,3 +138,4 @@ BEGIN
     VALUES ('PERCENTAGE', 10.00, TRUE);
 
 END $$;
+

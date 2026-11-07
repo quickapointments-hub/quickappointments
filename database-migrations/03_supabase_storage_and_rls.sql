@@ -83,3 +83,4 @@ USING (provider_id IN (SELECT id FROM provider_profiles WHERE user_id = auth.uid
 
 -- 6. FULL SERVICE ROLE ACCESS (Used by Backend API & SuperAdmin)
 -- The backend uses the SUPABASE_SERVICE_ROLE_KEY to coordinate concurrency locks and KYC verifications.
+
