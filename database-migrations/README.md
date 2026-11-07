@@ -1,43 +1,27 @@
-# Quick Appointments — Database Migrations Guide
+# Quick Appointments — Production Database Setup (Zero Seed Data)
 
-This directory contains the production database scripts for **PostgreSQL** and **Supabase**.
+This directory contains the production database DDL schema, storage bucket configuration, and Row Level Security (RLS) policies for **PostgreSQL** and **Supabase**.
+
+> **Note**: These scripts are 100% clean and contain **ZERO mock/seeded data** (no fake users, no test providers, and no demo bookings).
 
 ---
 
-## 📁 Migration Files Overview
+## 📁 Migration Files
 
-| File | Purpose | Contains Dummy Data? |
+| File | Description | Seed Data? |
 |---|---|:---:|
-| **`run_supabase_migration.sql`** | **Primary 1-Click Setup Script**: Creates all 21 tables, triggers, indexes, Supabase storage buckets, and RLS policies. | ❌ **NO (100% Clean)** |
-| **`00_clean_original_database_setup.sql`** | Standalone clean DDL schema script with automated `updated_at` triggers and indexes. | ❌ **NO (100% Clean)** |
-| **`01_create_superadmin.sql`** | Initializes the official SuperAdmin user account with customized phone, email, and admin permissions. | ❌ **NO (Clean Template)** |
-| **`02_clean_initial_categories.sql`** | Initializes the 4 official launch categories & standard service catalog. | ❌ **NO (Zero Mock Users/Bookings)** |
-| `02_seed_data.sql` *(optional)* | Legacy demo test records (Vikram Sethi, Pooja Verma, demo bookings) for local test environments. | ⚠️ **Mock Data Only** |
+| **[`run_supabase_migration.sql`](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/run_supabase_migration.sql)** | **Primary 1-Click Setup Script**: All 21 production tables, automatic `updated_at` triggers, performance indexes, Supabase storage buckets (`kyc-documents`, `service-images`, `avatars`), and RLS policies. | ❌ **0% (Pure Clean Setup)** |
+| **[`01_init_schema.sql`](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/01_init_schema.sql)** | Clean DDL tables, relationships, constraints, indexes, and triggers. | ❌ **0% (Pure DDL)** |
+| **[`02_supabase_storage_and_rls.sql`](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/02_supabase_storage_and_rls.sql)** | Supabase Storage buckets & Row Level Security policies. | ❌ **0% (Pure Security)** |
 
 ---
 
 ## 🚀 How to Run in Supabase (1-Click)
 
 1. Open your **[Supabase Project Dashboard](https://supabase.com/dashboard/project/ugxgtgvykauyydxoqouz)**.
-2. In the left navigation menu, click **SQL Editor**.
+2. In the left navigation sidebar, click **SQL Editor**.
 3. Click **New Query**.
-4. Open [run_supabase_migration.sql](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/run_supabase_migration.sql) and copy the entire contents.
-5. Paste it into the SQL Editor and click **Run** (or press `Ctrl + Enter`).
-6. All 21 production tables, triggers, storage buckets (`kyc-documents`, `service-images`, `avatars`), and RLS policies will be created cleanly.
+4. Copy the entire contents of **[`run_supabase_migration.sql`](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/run_supabase_migration.sql)** and paste it into the editor.
+5. Click **Run** (or press `Ctrl + Enter`).
 
----
-
-## 👤 Initializing Your SuperAdmin (Optional)
-
-To create your official administrator login:
-1. Open [01_create_superadmin.sql](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/01_create_superadmin.sql).
-2. Adjust `v_admin_phone`, `v_admin_email`, and `v_admin_name` to your own details.
-3. Run the script in the Supabase SQL Editor.
-
----
-
-## 🏷️ Initializing Categories & Services (Optional)
-
-To populate the 4 official business categories (Salon & Grooming, Healthcare & Wellness, Home Repairs, Auto Care):
-1. Open [02_clean_initial_categories.sql](file:///e:/Bizools/Qucik%20Appoptiment/database-migrations/02_clean_initial_categories.sql).
-2. Run it in the Supabase SQL Editor.
+All tables, triggers, storage buckets, and policies are created cleanly and immediately ready for production use.
