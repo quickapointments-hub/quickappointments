@@ -49,7 +49,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [reservation, setReservation] = useState<any>(null);
   const [reserving, setReserving] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
-  const [countdownSeconds, setCountdownSeconds] = useState(600); // 10 minutes
+  const [countdownSeconds, setCountdownSeconds] = useState(300); // 5 minutes (Provider SLA window)
 
   // Notes & Payment
   const [notes, setNotes] = useState('');
@@ -57,14 +57,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [confirming, setConfirming] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
 
-  // 10-Minute Lock Countdown Timer
+  // 5-Minute Lock Countdown Timer (Provider Acceptance SLA)
   useEffect(() => {
     if (!reservation) return;
+    setCountdownSeconds(300);
     const interval = setInterval(() => {
       setCountdownSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          setLockError('Reservation hold expired. Please select a slot again.');
+          setLockError('5-minute reservation hold expired. Please select a slot again or choose an alternative provider.');
           setReservation(null);
           setStep(1);
           return 0;

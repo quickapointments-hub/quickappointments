@@ -52,16 +52,17 @@ export class BookingService {
     const taxAmount = Math.round(servicePrice * taxRate);
     const totalAmount = servicePrice + taxAmount;
 
-    // Platform commission lookup (default 10%)
+    // Platform commission lookup (default 5% per client business spec)
     const commissionSetting = await prisma.commissionSetting.findFirst({
       where: { isActive: true },
       orderBy: { createdAt: 'desc' },
     });
-    const commissionRate = commissionSetting ? commissionSetting.rate : 10;
+    const commissionRate = commissionSetting ? commissionSetting.rate : 5;
     const platformCommission = Math.round((servicePrice * commissionRate) / 100);
     const providerEarnings = totalAmount - platformCommission;
 
     const bookingRef = `QA-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const serviceOtp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP for service start/completion
 
     // 3. Create Booking & release reservation in single transaction
     const booking = await prisma.$transaction(async (tx) => {
@@ -87,6 +88,7 @@ export class BookingService {
           totalAmount,
           platformCommission,
           providerEarnings,
+          serviceOtp,
           status: BookingStatus.CONFIRMED,
           paymentStatus: paymentMethod === PaymentMethod.CASH_ON_SERVICE ? PaymentStatus.PAID : PaymentStatus.PAID,
           paymentMethod,

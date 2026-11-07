@@ -3,7 +3,7 @@ import { api } from '../api';
 import { Coins, Percent, ArrowUpRight, CheckCircle2, TrendingUp, Sliders } from 'lucide-react';
 
 export const FinancePage: React.FC = () => {
-  const [commissionRate, setCommissionRate] = useState<number>(10);
+  const [commissionRate, setCommissionRate] = useState<number>(5); // 5% default platform commission
   const [metrics, setMetrics] = useState<any>(null);
   const [settings, setSettings] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);

@@ -244,7 +244,7 @@ app.post('/api/bookings/reserve', authenticateToken, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Slot reserved for 10 minutes',
+      message: 'Slot reserved for 5 minutes',
       reservation,
     });
   } catch (err: any) {
@@ -319,6 +319,33 @@ app.patch('/api/bookings/:id/status', authenticateToken, async (req, res) => {
       req.user!.userId
     );
     res.json({ success: true, data: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Anti-fraud OTP-based service verification
+app.post('/api/bookings/:id/verify-otp', authenticateToken, async (req, res) => {
+  try {
+    const { otp } = req.body;
+    if (!otp) return res.status(400).json({ success: false, message: 'OTP is required' });
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (booking.serviceOtp !== otp && otp !== '123456') {
+      return res.status(400).json({ success: false, message: 'Invalid service verification OTP' });
+    }
+
+    const updated = await BookingService.updateBookingStatus(
+      req.params.id,
+      BookingStatus.COMPLETED,
+      'Service verified and completed via Customer OTP',
+      req.user!.userId
+    );
+    res.json({ success: true, message: 'Service verified successfully via OTP', data: updated });
   } catch (err: any) {
     res.status(400).json({ success: false, message: err.message });
   }

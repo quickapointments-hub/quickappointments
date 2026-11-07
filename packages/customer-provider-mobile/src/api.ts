@@ -139,6 +139,14 @@ class MobileApiClient {
     });
   }
 
+  // OTP-based service verification
+  async verifyServiceOtp(bookingId: string, otp: string) {
+    return this.request(`/bookings/${bookingId}/verify-otp`, {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
+    });
+  }
+
   // Provider Cockpit
   async getProviderEarnings() {
     return this.request('/provider/earnings');

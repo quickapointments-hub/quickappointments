@@ -64,7 +64,7 @@ export const DashboardPage: React.FC<{ onNavigateToKyc: () => void }> = ({ onNav
     {
       title: 'Platform Commission',
       value: `₹${(metrics?.platformCommission || 0).toLocaleString()}`,
-      sub: 'Net platform earnings (10%)',
+      sub: 'Net platform earnings (5%)',
       icon: Percent,
       accent: 'text-emerald-700 bg-emerald-50 border-emerald-200',
     },

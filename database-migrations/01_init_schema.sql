@@ -205,10 +205,41 @@ CREATE TABLE IF NOT EXISTS provider_service_rates (
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     custom_price NUMERIC(10, 2),
     custom_duration INT,
+    approval_status VARCHAR(30) DEFAULT 'PENDING' CHECK (approval_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     is_active BOOLEAN DEFAULT TRUE,
     UNIQUE(provider_id, service_id)
 );
 CREATE INDEX IF NOT EXISTS idx_provider_rates ON provider_service_rates(provider_id, service_id);
+
+-- Provider Multiple Branch Locations (Pan-India scale)
+CREATE TABLE IF NOT EXISTS provider_branches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+    branch_name VARCHAR(150) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    address TEXT NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    phone VARCHAR(20),
+    is_primary BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_branches_provider ON provider_branches(provider_id);
+
+-- Provider Multiple Staff Members & Assignable Calendars
+CREATE TABLE IF NOT EXISTS provider_staff (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+    branch_id UUID REFERENCES provider_branches(id) ON DELETE SET NULL,
+    full_name VARCHAR(150) NOT NULL,
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    role_title VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_provider ON provider_staff(provider_id);
 
 -- ----------------------------------------------------------------------------
 -- 6. CONCURRENCY MUTEX & 10-MINUTE SLOT RESERVATIONS
@@ -255,6 +286,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     payment_status VARCHAR(30) DEFAULT 'PAID' CHECK (payment_status IN ('PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED')),
     payment_method VARCHAR(50) DEFAULT 'CASH_ON_SERVICE',
     payment_ref VARCHAR(100),
+    service_otp VARCHAR(10), -- 6-digit OTP required for provider to start/complete service
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -312,7 +344,7 @@ CREATE INDEX IF NOT EXISTS idx_provider_earnings_provider ON provider_earnings(p
 CREATE TABLE IF NOT EXISTS commission_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type VARCHAR(30) DEFAULT 'PERCENTAGE' CHECK (type IN ('PERCENTAGE', 'FIXED')),
-    rate NUMERIC(5, 2) DEFAULT 10.00,
+    rate NUMERIC(5, 2) DEFAULT 5.00, -- 5% default platform commission
     category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     provider_id UUID REFERENCES provider_profiles(id) ON DELETE SET NULL,
     is_active BOOLEAN DEFAULT TRUE,

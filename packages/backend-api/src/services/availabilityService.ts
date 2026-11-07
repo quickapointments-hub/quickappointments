@@ -162,7 +162,7 @@ export class AvailabilityService {
       });
 
       if (existingReservation && existingReservation.customerId !== customerId) {
-        throw new Error('This slot is currently held by another user. Try another slot or check back in 10 minutes.');
+        throw new Error('This slot is currently held by another user. Try another slot or check back in 5 minutes.');
       }
 
       // If customer already holds this slot, renew expiry
@@ -170,8 +170,8 @@ export class AvailabilityService {
         return existingReservation;
       }
 
-      // 3. Hold slot for 10 minutes
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      // 3. Hold slot for 5 minutes (Provider SLA acceptance window)
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
       const reservation = await prisma.slotReservation.create({
         data: {

@@ -179,6 +179,7 @@ model ProviderServiceRate {
   serviceId      String
   customPrice    Float?
   customDuration Int?
+  approvalStatus String   @default("PENDING") // PENDING, APPROVED, REJECTED (Admin approval required)
   isActive       Boolean  @default(true)
 
   provider       ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
@@ -228,6 +229,7 @@ model Booking {
   paymentStatus      String   @default("PAID") // PENDING, PROCESSING, PAID, FAILED, REFUNDED
   paymentMethod      String   @default("CASH_ON_SERVICE")
   paymentRef         String?
+  serviceOtp         String?  // 6-digit customer verification OTP to start/complete service
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -285,7 +287,7 @@ model ProviderEarning {
 model CommissionSetting {
   id            String   @id @default(uuid())
   type          String   @default("PERCENTAGE") // PERCENTAGE, FIXED
-  rate          Float    @default(10.0)
+  rate          Float    @default(5.0) // 5% default platform commission
   categoryId    String?
   providerId    String?
   isActive      Boolean  @default(true)

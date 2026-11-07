@@ -40,8 +40,8 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="text"
                 disabled
-                value="10 Minutes (Pessimistic concurrency lock)"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700"
+                value="5 Minutes (Provider SLA acceptance window)"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-semibold"
               />
             </div>
           </div>

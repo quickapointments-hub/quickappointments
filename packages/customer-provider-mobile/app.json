@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Quick Appointments",
+    "slug": "quick-appointments",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./public/logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./public/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111114"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quickappointments.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./public/logo.png",
+        "backgroundColor": "#111114"
+      },
+      "package": "com.quickappointments.app"
+    },
+    "web": {
+      "favicon": "./public/logo.png",
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ugxgtgvykauyydxoqouz"
+      }
+    }
+  }
+}
