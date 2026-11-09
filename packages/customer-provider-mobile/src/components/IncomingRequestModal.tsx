@@ -21,15 +21,23 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
+    const calculateRemaining = () => {
+      if (booking?.createdAt) {
+        const expiresAt = new Date(booking.createdAt).getTime() + 300 * 1000;
+        return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      }
+      return 300;
+    };
+
+    setSecondsRemaining(calculateRemaining());
+
     const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleRejectAuto();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const remaining = calculateRemaining();
+      setSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        handleRejectAuto();
+      }
     }, 1000);
 
     return () => clearInterval(timer);

@@ -37,16 +37,24 @@ export const AwaitingProviderModal: React.FC<AwaitingProviderModalProps> = ({
       }
     }, 4000);
 
+    const calculateRemaining = () => {
+      if (booking?.createdAt) {
+        const expiresAt = new Date(booking.createdAt).getTime() + 300 * 1000;
+        return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      }
+      return 300;
+    };
+
+    setSecondsRemaining(calculateRemaining());
+
     const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          clearInterval(pollInterval);
-          onDeclinedOrExpired();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const remaining = calculateRemaining();
+      setSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        clearInterval(pollInterval);
+        onDeclinedOrExpired();
+      }
     }, 1000);
 
     return () => {
