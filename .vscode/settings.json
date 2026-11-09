@@ -1,6 +1,6 @@
 {
   "java.project.importOnFirstTimeStartup": "disabled",
   "java.autobuild.enabled": false,
-  "java.project.explorer.showNonJavaResources": false
+  "java.project.explorer.showNonJavaResources": false,
+  "java.configuration.updateBuildConfiguration": "interactive"
 }
-

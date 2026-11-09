@@ -25,6 +25,6 @@
   "author": "Quick Appointments Engineering",
   "license": "UNLICENSED",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^10.0.7"
   }
 }
