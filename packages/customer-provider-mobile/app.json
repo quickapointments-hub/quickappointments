@@ -4,10 +4,10 @@
     "slug": "quick-appointments",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./public/logo.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./public/logo.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#111114"
     },
@@ -25,7 +25,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./public/logo.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111114"
       },
       "package": "com.quickappointments.app",

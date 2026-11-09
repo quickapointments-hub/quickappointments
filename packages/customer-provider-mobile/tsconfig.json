@@ -19,10 +19,13 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
   "include": [
-    "src"
+    "src",
+    "App.tsx"
   ],
   "extends": "expo/tsconfig.base"
 }
