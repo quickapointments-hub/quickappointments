@@ -1,10 +1,32 @@
 {
+  "java.enabled": false,
   "java.import.gradle.enabled": false,
-  "java.project.importOnFirstTimeStartup": "disabled",
+  "java.import.maven.enabled": false,
   "java.autobuild.enabled": false,
+  "java.project.importOnFirstTimeStartup": "disabled",
   "java.project.explorer.showNonJavaResources": false,
   "java.configuration.updateBuildConfiguration": "disabled",
   "java.compile.nullAnalysis.mode": "disabled",
+  "java.project.importExclusions": [
+    "**/node_modules/**",
+    "**/.gradle/**",
+    "**/android/build/**",
+    "**/android/.gradle/**",
+    "**/packages/customer-provider-mobile/android/**"
+  ],
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype/**",
+    "**/META-INF/maven/**",
+    "**/packages/customer-provider-mobile/android/**"
+  ],
+  "java.project.resourceFilters": [
+    "node_modules",
+    ".git"
+  ],
+  "gradle.autoDetect": "off",
+  "gradle.nestedProjects": false,
   "files.exclude": {
     "**/android/.gradle": true,
     "**/android/build": true
