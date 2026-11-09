@@ -132,10 +132,16 @@ class MobileApiClient {
     });
   }
 
-  async confirmBooking(reservationToken: string, paymentMethod: string = 'CASH_ON_SERVICE', notes?: string) {
+  async confirmBooking(
+    reservationToken: string,
+    paymentMethod: string = 'CASH_ON_SERVICE',
+    notes?: string,
+    paymentTxId?: string,
+    orderId?: string
+  ) {
     return this.request('/bookings/confirm', {
       method: 'POST',
-      body: JSON.stringify({ reservationToken, paymentMethod, notes }),
+      body: JSON.stringify({ reservationToken, paymentMethod, notes, paymentTxId, orderId }),
     });
   }
 

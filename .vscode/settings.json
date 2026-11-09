@@ -1,6 +1,12 @@
 {
+  "java.import.gradle.enabled": false,
   "java.project.importOnFirstTimeStartup": "disabled",
   "java.autobuild.enabled": false,
   "java.project.explorer.showNonJavaResources": false,
-  "java.configuration.updateBuildConfiguration": "interactive"
+  "java.configuration.updateBuildConfiguration": "disabled",
+  "java.compile.nullAnalysis.mode": "disabled",
+  "files.exclude": {
+    "**/android/.gradle": true,
+    "**/android/build": true
+  }
 }

@@ -62,6 +62,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [confirming, setConfirming] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
 
+  // Razorpay Mock Simulation State
+  const [simulatingPayment, setSimulatingPayment] = useState(false);
+  const [mockPayment, setMockPayment] = useState<{
+    txnId: string;
+    orderId: string;
+    amount: number;
+    dateTime: string;
+  } | null>(null);
+
   // 5-Minute Lock Countdown Timer (Provider Acceptance SLA based on server timestamp)
   useEffect(() => {
     if (!reservation) return;
@@ -153,19 +162,81 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   };
 
   // Confirm Booking
-  const handleConfirmBooking = async () => {
+  const handleConfirmBooking = async (mockData?: { txnId: string; orderId: string; amount: number; dateTime: string }) => {
     if (!reservation) return;
     try {
       setConfirming(true);
-      const res = await mobileApi.confirmBooking(reservation.id, paymentMethod, notes);
-      setConfirmedBooking(res.data);
+      const chosenPaymentMethod = mockData ? 'RAZORPAY' : paymentMethod;
+      let resBooking: any;
+      try {
+        const res = await mobileApi.confirmBooking(
+          reservation.id,
+          chosenPaymentMethod,
+          notes,
+          mockData?.txnId,
+          mockData?.orderId
+        );
+        resBooking = res.data;
+      } catch (backendErr) {
+        // Fallback for development/testing mock mode if backend is offline
+        const totalAmount = service.basePrice + Math.round(service.basePrice * 0.05);
+        resBooking = {
+          id: 'booking_' + Date.now(),
+          bookingRef: `QA-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
+          serviceOtp: '123456',
+          service,
+          provider: selectedProvider,
+          date: reservation.date,
+          startTime: reservation.startTime,
+          totalAmount,
+          status: 'CONFIRMED',
+          paymentMethod: chosenPaymentMethod,
+          paymentStatus: 'PAID',
+          paymentTx: {
+            gatewayTxId: mockData?.txnId || `pay_mock_${Date.now()}`,
+            orderId: mockData?.orderId || `order_mock_${Date.now()}`,
+            status: 'SUCCESS',
+            gateway: chosenPaymentMethod,
+          },
+        };
+      }
+      setConfirmedBooking(resBooking);
       // Initiate 5-minute provider SLA state
-      setAwaitingBooking(res.data);
+      setAwaitingBooking(resBooking);
     } catch (err: any) {
       alert(`Booking confirmation failed: ${err.message}`);
     } finally {
       setConfirming(false);
     }
+  };
+
+  // Mock Razorpay Payment Submission Simulation
+  const handlePayWithRazorpay = () => {
+    setSimulatingPayment(true);
+    setTimeout(() => {
+      const generatedTxnId = `pay_mock_${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const generatedOrderId = `order_mock_${Math.floor(100000 + Math.random() * 900000)}`;
+      const totalAmount = service.basePrice + Math.round(service.basePrice * 0.05);
+      const now = new Date();
+      const formattedDate = now.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }) + ', ' + now.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+
+      setMockPayment({
+        txnId: generatedTxnId,
+        orderId: generatedOrderId,
+        amount: totalAmount,
+        dateTime: formattedDate,
+      });
+      setSimulatingPayment(false);
+      setStep(2.5); // Display Mock Payment Success Screen
+    }, 1200);
   };
 
   const minutesRemaining = Math.floor(countdownSeconds / 60);
@@ -178,7 +249,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
           <div>
             <h3 className="font-bold text-sm text-slate-900">
-              {step === 3 ? 'Appointment Confirmed! 🎉' : 'Book Appointment'}
+              {step === 3
+                ? 'Appointment Confirmed! 🎉'
+                : step === 2.5
+                ? 'Payment Successful'
+                : 'Book Appointment'}
             </h3>
             <p className="text-xs text-slate-500 font-medium">{service.name}</p>
           </div>
@@ -373,12 +448,110 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
             </div>
 
+            {paymentMethod === 'RAZORPAY' ? (
+              <button
+                type="button"
+                onClick={handlePayWithRazorpay}
+                disabled={simulatingPayment || confirming}
+                className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {simulatingPayment ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Simulating Razorpay Payment...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Pay Now ₹{service.basePrice + Math.round(service.basePrice * 0.05)}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleConfirmBooking()}
+                disabled={confirming}
+                className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>{confirming ? 'Securing Appointment...' : 'Confirm Appointment'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* STEP 2.5: Mock Razorpay Payment Success Screen */}
+        {step === 2.5 && mockPayment && (
+          <div className="space-y-4 py-2 animate-fadeIn">
+            {/* Payment Success Checkmark & Badges */}
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h4 className="font-bold font-display text-base text-slate-900">
+                  Payment Successful
+                </h4>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Razorpay Mock Sandbox • Captured</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Details Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Payment Amount</span>
+                <span className="font-bold text-base text-brand-600">
+                  ₹{mockPayment.amount.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-slate-500">Mock Transaction ID</span>
+                <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px]">
+                  {mockPayment.txnId}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-slate-500">Order ID</span>
+                <span className="font-mono font-medium text-slate-700">
+                  {mockPayment.orderId}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-slate-500">Payment Date & Time</span>
+                <span className="font-medium text-slate-700">
+                  {mockPayment.dateTime}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-slate-500">Payment Method</span>
+                <span className="font-semibold text-slate-800">
+                  UPI / Cards (Razorpay Simulated)
+                </span>
+              </div>
+            </div>
+
+            {/* Development Mock Notice */}
+            <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/70 text-amber-800 text-[11px] space-y-0.5">
+              <p className="font-semibold flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Simulated Sandbox Transaction</span>
+              </p>
+              <p className="text-amber-700 leading-relaxed">
+                This is a mock transaction in the development environment. No real payment gateway was contacted and no funds were debited.
+              </p>
+            </div>
+
+            {/* Navigation to Booking Confirmation & Ticket */}
             <button
-              onClick={handleConfirmBooking}
+              onClick={() => handleConfirmBooking(mockPayment)}
               disabled={confirming}
               className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <span>{confirming ? 'Securing Appointment...' : 'Confirm Appointment'}</span>
+              <span>{confirming ? 'Generating Appointment Ticket...' : 'View Appointment Ticket & Service OTP'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

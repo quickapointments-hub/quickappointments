@@ -9,7 +9,9 @@ export class BookingService {
     customerId: string,
     reservationToken: string,
     paymentMethod: PaymentMethod = PaymentMethod.CASH_ON_SERVICE,
-    notes?: string
+    notes?: string,
+    paymentTxId?: string,
+    orderId?: string
   ) {
     // 1. Fetch and validate reservation
     const reservation = await prisma.slotReservation.findUnique({
@@ -103,7 +105,7 @@ export class BookingService {
               amount: totalAmount,
               status: 'SUCCESS',
               gateway: paymentMethod,
-              gatewayTxId: `TXN-${Date.now()}`,
+              gatewayTxId: paymentTxId || (paymentMethod === PaymentMethod.RAZORPAY ? `pay_mock_${Date.now()}` : `TXN-${Date.now()}`),
             },
           },
         },

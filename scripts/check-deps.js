@@ -61,3 +61,4 @@ function analyzePackage(pkgDir) {
 analyzePackage(path.resolve(__dirname, '../packages/admin-web'));
 analyzePackage(path.resolve(__dirname, '../packages/customer-provider-mobile'));
 analyzePackage(path.resolve(__dirname, '../packages/backend-api'));
+

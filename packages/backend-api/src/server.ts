@@ -330,7 +330,7 @@ app.post('/api/bookings/reserve', authenticateToken, async (req, res) => {
 
 app.post('/api/bookings/confirm', authenticateToken, async (req, res) => {
   try {
-    const { reservationToken, paymentMethod, notes } = req.body;
+    const { reservationToken, paymentMethod, notes, paymentTxId, orderId } = req.body;
     if (!reservationToken) {
       return res.status(400).json({ success: false, message: 'reservationToken is required' });
     }
@@ -344,7 +344,9 @@ app.post('/api/bookings/confirm', authenticateToken, async (req, res) => {
       customer.id,
       reservationToken,
       paymentMethod,
-      notes
+      notes,
+      paymentTxId,
+      orderId
     );
 
     res.status(201).json({
