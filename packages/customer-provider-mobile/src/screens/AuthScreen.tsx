@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { mobileApi } from '../api';
 import { Phone, KeyRound, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { ProfileSetupScreen } from './ProfileSetupScreen';
 
 export const AuthScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
-  const { login } = useAuth();
+  const { login, switchRole } = useAuth();
   const [phone, setPhone] = useState('+919811122233');
   const [fullName, setFullName] = useState('Pooja Verma');
   const [role, setRole] = useState<'CUSTOMER' | 'PROVIDER'>('CUSTOMER');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,14 +33,30 @@ export const AuthScreen: React.FC<{ onComplete: () => void }> = ({ onComplete })
     try {
       setLoading(true);
       setError(null);
+      const res = await mobileApi.verifyOtp(phone, otp, fullName, role);
       await login(phone, otp, fullName, role);
-      onComplete();
+      if (res.isNewUser || !res.user?.customerProfile?.city) {
+        setShowProfileSetup(true);
+      } else {
+        onComplete();
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (showProfileSetup) {
+    return (
+      <ProfileSetupScreen
+        onComplete={(chosenRole) => {
+          switchRole(chosenRole);
+          onComplete();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-full flex flex-col justify-between p-6 bg-slate-50">

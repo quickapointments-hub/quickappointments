@@ -11,6 +11,8 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
+import { AwaitingProviderModal } from './AwaitingProviderModal';
+import { AlternativeProvidersModal } from './AlternativeProvidersModal';
 
 interface BookingModalProps {
   service: any;
@@ -28,10 +30,13 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [step, setStep] = useState<number>(1);
   // Step 1: Select Date & Provider
   // Step 2: Select Slot & Concurrency Lock
-  // Step 3: Checkout Summary & Payment Confirm
+  // Step 2.5: Awaiting Provider SLA
+  // Step 3: Checkout Summary & Confirmed Ticket
 
   const [selectedProvider, setSelectedProvider] = useState<any>(provider || null);
   const [availableProviders, setAvailableProviders] = useState<any[]>([]);
+  const [awaitingBooking, setAwaitingBooking] = useState<any>(null);
+  const [showAlternatives, setShowAlternatives] = useState(false);
   
   // Date calculation: Default tomorrow (or next open weekday)
   const getNextAvailableDate = () => {
@@ -145,8 +150,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
       setConfirming(true);
       const res = await mobileApi.confirmBooking(reservation.id, paymentMethod, notes);
       setConfirmedBooking(res.data);
-      setStep(3); // Confirmation screen
-      onSuccess(res.data);
+      // Initiate 5-minute provider SLA state
+      setAwaitingBooking(res.data);
     } catch (err: any) {
       alert(`Booking confirmation failed: ${err.message}`);
     } finally {
@@ -386,6 +391,20 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </p>
             </div>
 
+            {/* Anti-Fraud 6-Digit Customer OTP Display (C-08) */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 text-center space-y-1 shadow-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center justify-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span>6-Digit Service Delivery OTP</span>
+              </span>
+              <div className="font-mono text-2xl font-black text-amber-950 tracking-widest py-0.5">
+                {confirmedBooking.serviceOtp || '123456'}
+              </div>
+              <p className="text-[10px] text-amber-700">
+                Keep this secure. Share this code with your specialist only when they arrive for service delivery.
+              </p>
+            </div>
+
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-left space-y-1.5">
               <p className="text-slate-600">
                 <span className="font-semibold text-slate-900">Service:</span> {service.name}
@@ -401,12 +420,52 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
 
             <button
-              onClick={onClose}
+              onClick={() => {
+                onSuccess(confirmedBooking);
+                onClose();
+              }}
               className="w-full py-2.5 rounded-xl bg-charcoal-900 hover:bg-black text-white text-xs font-semibold"
             >
               Done & View Appointments
             </button>
           </div>
+        )}
+
+        {/* C-07: Awaiting Provider 5-Minute SLA Modal */}
+        {awaitingBooking && (
+          <AwaitingProviderModal
+            booking={awaitingBooking}
+            onAccepted={(b) => {
+              setConfirmedBooking(b);
+              setAwaitingBooking(null);
+              setStep(3);
+              onSuccess(b);
+            }}
+            onDeclinedOrExpired={() => {
+              setAwaitingBooking(null);
+              setShowAlternatives(true);
+            }}
+            onCancelAndRefund={() => {
+              setAwaitingBooking(null);
+              onClose();
+            }}
+          />
+        )}
+
+        {/* C-11: Alternative Providers Re-Routing Modal */}
+        {showAlternatives && (
+          <AlternativeProvidersModal
+            booking={confirmedBooking || { id: 'temp', serviceId: service.id }}
+            onSelectAlternative={(altProvider) => {
+              setShowAlternatives(false);
+              setSelectedProvider(altProvider);
+              setStep(1);
+            }}
+            onClose={() => {
+              setShowAlternatives(false);
+              onClose();
+            }}
+          />
         )}
       </div>
     </div>

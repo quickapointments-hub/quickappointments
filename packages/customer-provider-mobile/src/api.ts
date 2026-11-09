@@ -80,6 +80,20 @@ class MobileApiClient {
     return this.request('/auth/me');
   }
 
+  async updateProfile(data: { fullName: string; email?: string; city?: string; role?: string }) {
+    return this.request('/users/profile', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMe(data: any) {
+    return this.request('/users/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Catalog
   async getCategories() {
     return this.request('/catalog/categories');
@@ -147,6 +161,44 @@ class MobileApiClient {
     });
   }
 
+  // Provider 5-min SLA Actions (P-09)
+  async acceptBooking(bookingId: string) {
+    return this.request(`/provider/bookings/${bookingId}/accept`, { method: 'POST' });
+  }
+
+  async rejectBooking(bookingId: string, reason?: string) {
+    return this.request(`/provider/bookings/${bookingId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // Customer Cancellation & 100% Refund (C-10)
+  async cancelBooking(bookingId: string, reason?: string) {
+    return this.request(`/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // Alternative Providers (C-11)
+  async getAlternatives(bookingId: string) {
+    return this.request(`/bookings/${bookingId}/alternatives`);
+  }
+
+  // C-12 Rate & Review
+  async submitReview(bookingId: string, rating: number, tags: string[], comment?: string) {
+    return this.request(`/bookings/${bookingId}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, tags, comment }),
+    });
+  }
+
+  // P-13 Provider Reviews
+  async getProviderReviews() {
+    return this.request('/provider/reviews');
+  }
+
   // Provider Cockpit
   async getProviderEarnings() {
     return this.request('/provider/earnings');
@@ -156,6 +208,48 @@ class MobileApiClient {
     return this.request('/provider/onboard', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  // Support & Dispute Tickets (C-14 / P-14)
+  async getMyTickets() {
+    return this.request('/support/tickets');
+  }
+
+  async createSupportTicket(data: { category: string; subject: string; description: string; bookingId?: string }) {
+    return this.request('/support/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async addTicketReply(ticketId: string, message: string) {
+    return this.request(`/support/tickets/${ticketId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  // Branches & Staff (P-05 & P-06)
+  async getProviderBranches() {
+    return this.request('/provider/branches');
+  }
+
+  async addProviderBranch(data: any) {
+    return this.request('/provider/branches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getProviderStaff() {
+    return this.request('/provider/staff');
+  }
+
+  async addProviderStaff(data: any) {
+    return this.request('/provider/staff', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 

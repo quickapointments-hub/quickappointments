@@ -1,8 +1,30 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Briefcase, ShieldCheck, Repeat, LogOut, ChevronRight, HelpCircle } from 'lucide-react';
+import {
+  Briefcase,
+  ShieldCheck,
+  Repeat,
+  LogOut,
+  ChevronRight,
+  HelpCircle,
+  Star,
+  Building2,
+  Users,
+} from 'lucide-react';
 
-export const ProviderProfileScreen: React.FC = () => {
+export const ProviderProfileScreen: React.FC<{
+  onOpenKyc?: () => void;
+  onOpenReviews?: () => void;
+  onOpenBranches?: () => void;
+  onOpenStaff?: () => void;
+  onOpenSupport?: () => void;
+}> = ({
+  onOpenKyc,
+  onOpenReviews,
+  onOpenBranches,
+  onOpenStaff,
+  onOpenSupport,
+}) => {
   const { user, switchRole, logout } = useAuth();
 
   return (
@@ -60,18 +82,57 @@ export const ProviderProfileScreen: React.FC = () => {
 
       {/* Menu Options */}
       <div className="bg-white rounded-3xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-sm">
-        <div className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs">
+        <div
+          onClick={onOpenKyc}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
           <div className="flex items-center gap-3 text-slate-700 font-medium">
             <Briefcase className="w-4 h-4 text-brand-600" />
-            <span>Provider KYC & Document Hub</span>
+            <span>KYC Verification & Banking Details</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>
 
-        <div className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs">
+        <div
+          onClick={onOpenReviews}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-slate-700 font-medium">
+            <Star className="w-4 h-4 text-amber-500" />
+            <span>Customer Reviews & Feedback</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+
+        <div
+          onClick={onOpenBranches}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-slate-700 font-medium">
+            <Building2 className="w-4 h-4 text-blue-600" />
+            <span>Branch Locations</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+
+        <div
+          onClick={onOpenStaff}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-slate-700 font-medium">
+            <Users className="w-4 h-4 text-emerald-600" />
+            <span>Staff & Specialists</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+
+        <div
+          onClick={onOpenSupport}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
           <div className="flex items-center gap-3 text-slate-700 font-medium">
             <HelpCircle className="w-4 h-4 text-brand-600" />
-            <span>Provider Partner Support</span>
+            <span>Provider Partner Support & Disputes</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>

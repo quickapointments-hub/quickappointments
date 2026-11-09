@@ -17,7 +17,8 @@ import { BookingModal } from '../components/BookingModal';
 export const CustomerHomeScreen: React.FC<{
   onSelectCategory: (cat: any) => void;
   onNavigateToBookings: () => void;
-}> = ({ onSelectCategory, onNavigateToBookings }) => {
+  onOpenSearch?: () => void;
+}> = ({ onSelectCategory, onNavigateToBookings, onOpenSearch }) => {
   const { user } = useAuth();
   const [categories, setCategories] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -109,14 +110,18 @@ export const CustomerHomeScreen: React.FC<{
 
       {/* Search Input */}
       <div className="px-5">
-        <div className="relative">
+        <div
+          onClick={onOpenSearch}
+          className="relative cursor-pointer"
+        >
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
+            readOnly={!!onOpenSearch}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search hair styling, facial, doctor, AC repair..."
-            className="w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm"
+            className="w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm cursor-pointer"
           />
         </div>
       </div>

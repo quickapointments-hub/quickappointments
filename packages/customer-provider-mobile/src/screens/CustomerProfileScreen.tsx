@@ -2,7 +2,9 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Phone, ShieldCheck, Repeat, LogOut, ChevronRight, HelpCircle } from 'lucide-react';
 
-export const CustomerProfileScreen: React.FC = () => {
+export const CustomerProfileScreen: React.FC<{
+  onOpenSupport?: () => void;
+}> = ({ onOpenSupport }) => {
   const { user, switchRole, logout } = useAuth();
 
   return (
@@ -65,10 +67,13 @@ export const CustomerProfileScreen: React.FC = () => {
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>
 
-        <div className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs">
+        <div
+          onClick={onOpenSupport}
+          className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors text-xs"
+        >
           <div className="flex items-center gap-3 text-slate-700 font-medium">
             <HelpCircle className="w-4 h-4 text-brand-600" />
-            <span>Help & Customer Support</span>
+            <span>Help & Customer Support Desk</span>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>

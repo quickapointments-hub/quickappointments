@@ -29,6 +29,8 @@ model User {
   adminProfile AdminUser?
   notifications Notification[]
   auditLogs    AuditLog[]
+  supportTickets SupportTicket[]
+  deviceTokens DeviceToken[]
 }
 
 model UserRoleItem {
@@ -80,6 +82,8 @@ model CustomerProfile {
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings       Booking[]
   reservations   SlotReservation[]
+  reviews        Review[]
+  savedAddresses SavedAddress[]
 }
 
 model ProviderProfile {
@@ -106,10 +110,15 @@ model ProviderProfile {
   user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   documents           ProviderDocument[]
   workingHours        ProviderWorkingHour[]
+  branches            ProviderBranch[]
+  staff               ProviderStaff[]
   customServices      ProviderServiceRate[]
   bookings            Booking[]
   reservations        SlotReservation[]
   earnings            ProviderEarning[]
+  reviews             Review[]
+  bankAccount         ProviderBankAccount?
+  payoutItems         PayoutItem[]
 }
 
 model ProviderDocument {
@@ -151,7 +160,8 @@ model Category {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  services     Service[]
+  services       Service[]
+  cityCategories CityCategory[]
 }
 
 model Service {
@@ -239,6 +249,8 @@ model Booking {
   service            Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   history            BookingStatusHistory[]
   paymentTx          PaymentTransaction[]
+  review             Review?
+  refund             Refund?
 
   @@index([providerId, date])
   @@index([customerId])
@@ -337,5 +349,215 @@ model SystemSetting {
   value       String
   description String?
   updatedAt   DateTime @updatedAt
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  customerId String
+  providerId String
+  rating     Float    // 1.0 to 5.0
+  tags       String?  // JSON string e.g. ["On time", "Professional"]
+  comment    String?
+  reply      String?
+  createdAt  DateTime @default(now())
+
+  booking    Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer   CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+}
+
+model Coupon {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  discountType      String    @default("PERCENTAGE") // PERCENTAGE, FIXED
+  value             Float
+  minOrderAmount    Float     @default(0.0)
+  maxDiscountAmount Float?
+  usageLimit        Int?
+  usedCount         Int       @default(0)
+  expiresAt         DateTime?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+}
+
+model Refund {
+  id              String    @id @default(uuid())
+  bookingId       String    @unique
+  amount          Float
+  reason          String
+  status          String    @default("REQUESTED") // REQUESTED, PROCESSING, REFUNDED, FAILED
+  gatewayRefundId String?
+  deadline        DateTime  // 48 hours deadline
+  processedAt     DateTime?
+  adminRemarks    String?
+  createdAt       DateTime  @default(now())
+
+  booking         Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model PayoutBatch {
+  id             String       @id @default(uuid())
+  batchRef       String       @unique
+  settlementDate String       // YYYY-MM-DD
+  totalAmount    Float
+  providerCount  Int
+  status         String       @default("PENDING") // PENDING, GENERATED, PROCESSED, FAILED
+  processedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  items          PayoutItem[]
+}
+
+model PayoutItem {
+  id             String      @id @default(uuid())
+  batchId        String
+  providerId     String
+  netAmount      Float
+  bankAccountRef String?
+  status         String      @default("PENDING") // PENDING, PAID, FAILED
+  bankTxRef      String?
+  paidAt         DateTime?
+
+  batch          PayoutBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  provider       ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([providerId])
+}
+
+model ProviderBankAccount {
+  id                String   @id @default(uuid())
+  providerId        String   @unique
+  accountHolderName String
+  bankName          String
+  accountNumber     String
+  ifscCode          String
+  isVerified        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  provider          ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model City {
+  id         String         @id @default(uuid())
+  name       String         @unique
+  state      String
+  latitude   Float?
+  longitude  Float?
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+
+  categories CityCategory[]
+}
+
+model CityCategory {
+  id         String   @id @default(uuid())
+  cityId     String
+  categoryId String
+  isEnabled  Boolean  @default(true)
+
+  city       City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([cityId, categoryId])
+}
+
+model SupportTicket {
+  id         String          @id @default(uuid())
+  ticketRef  String          @unique
+  userId     String
+  bookingId  String?
+  category   String          // DISPUTE, PAYMENT, CANCELLATION, GENERAL
+  subject    String
+  status     String          @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority   String          @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  resolution String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   TicketMessage[]
+
+  @@index([userId])
+}
+
+model TicketMessage {
+  id            String        @id @default(uuid())
+  ticketId      String
+  senderId      String
+  senderRole    String        // CUSTOMER, PROVIDER, ADMIN
+  message       String
+  attachmentUrl String?
+  createdAt     DateTime      @default(now())
+
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model DeviceToken {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique
+  deviceType String   @default("ANDROID") // ANDROID, IOS, WEB
+  isActive   Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SavedAddress {
+  id           String          @id @default(uuid())
+  customerId   String
+  label        String          @default("Home") // Home, Work, Other
+  addressLine  String
+  city         String
+  pincode      String?
+  latitude     Float?
+  longitude    Float?
+  isDefault    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+
+  customer     CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+model ProviderBranch {
+  id         String   @id @default(uuid())
+  providerId String
+  name       String
+  address    String
+  city       String
+  phone      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  staff      ProviderStaff[]
+
+  @@index([providerId])
+}
+
+model ProviderStaff {
+  id          String   @id @default(uuid())
+  providerId  String
+  branchId    String?
+  name        String
+  specialty   String?
+  photoUrl    String?
+  workingDays String?  @default("Mon,Tue,Wed,Thu,Fri,Sat")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  branch      ProviderBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
 }
 

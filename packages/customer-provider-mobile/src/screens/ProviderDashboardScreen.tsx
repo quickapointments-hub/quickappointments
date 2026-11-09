@@ -11,7 +11,10 @@ import {
   Briefcase,
   ShieldCheck,
   ChevronRight,
+  KeyRound,
 } from 'lucide-react';
+import { IncomingRequestModal } from '../components/IncomingRequestModal';
+import { BookingOtpModal } from '../components/BookingOtpModal';
 
 export const ProviderDashboardScreen: React.FC<{
   onNavigateToSchedule: () => void;
@@ -21,6 +24,8 @@ export const ProviderDashboardScreen: React.FC<{
   const [bookings, setBookings] = useState<any[]>([]);
   const [earnings, setEarnings] = useState<any>({ totalNet: 0, totalGross: 0 });
   const [loading, setLoading] = useState(true);
+  const [activeRequest, setActiveRequest] = useState<any>(null);
+  const [otpBooking, setOtpBooking] = useState<any>(null);
 
   useEffect(() => {
     loadProviderData();
@@ -33,8 +38,15 @@ export const ProviderDashboardScreen: React.FC<{
         mobileApi.getProviderBookings().catch(() => ({ data: [] })),
         mobileApi.getProviderEarnings().catch(() => ({ data: { totalNet: 0, totalGross: 0 } })),
       ]);
-      setBookings(bRes.data || []);
+      const list = bRes.data || [];
+      setBookings(list);
       setEarnings(eRes.data || { totalNet: 0, totalGross: 0 });
+
+      // If there's an awaiting booking request, surface incoming SLA modal
+      const awaiting = list.find((b: any) => b.status === 'AWAITING' || b.status === 'PENDING');
+      if (awaiting && !activeRequest) {
+        setActiveRequest(awaiting);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -51,7 +63,9 @@ export const ProviderDashboardScreen: React.FC<{
     }
   };
 
-  const pendingBookings = bookings.filter((b) => ['CONFIRMED', 'PENDING'].includes(b.status));
+  const pendingBookings = bookings.filter((b) =>
+    ['CONFIRMED', 'PENDING', 'AWAITING', 'IN_PROGRESS'].includes(b.status)
+  );
 
   return (
     <div className="pb-24 px-5 pt-4 space-y-5">
@@ -162,23 +176,72 @@ export const ProviderDashboardScreen: React.FC<{
 
               {/* Status Action Buttons */}
               <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={() => handleUpdateStatus(b.id, 'COMPLETED')}
-                  className="flex-1 py-2 rounded-xl bg-charcoal-900 hover:bg-black text-white text-xs font-bold shadow-sm transition-all"
-                >
-                  Mark Completed
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(b.id, 'CANCELLED')}
-                  className="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-all"
-                >
-                  Cancel
-                </button>
+                {b.status === 'AWAITING' || b.status === 'PENDING' ? (
+                  <>
+                    <button
+                      onClick={() => setActiveRequest(b)}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Review SLA Request (5m)</span>
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(b.id, 'DECLINED')}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                    >
+                      Decline
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setOtpBooking(b)}
+                      className="flex-1 py-2 rounded-xl bg-charcoal-900 hover:bg-black text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-brand-400" />
+                      <span>Verify Customer OTP</span>
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(b.id, 'CANCELLED')}
+                      className="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* P-09: Incoming 5-Minute SLA Modal */}
+      {activeRequest && (
+        <IncomingRequestModal
+          booking={activeRequest}
+          onAccept={() => {
+            setActiveRequest(null);
+            loadProviderData();
+          }}
+          onReject={() => {
+            setActiveRequest(null);
+            loadProviderData();
+          }}
+          onClose={() => setActiveRequest(null)}
+        />
+      )}
+
+      {/* P-11: Anti-Fraud OTP Completion Modal */}
+      {otpBooking && (
+        <BookingOtpModal
+          booking={otpBooking}
+          onSuccess={() => {
+            setOtpBooking(null);
+            loadProviderData();
+          }}
+          onClose={() => setOtpBooking(null)}
+        />
+      )}
     </div>
   );
 };

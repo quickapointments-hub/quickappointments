@@ -215,3 +215,161 @@ export interface AdminDashboardMetrics {
   netProviderPayout: number;
 }
 
+export interface Review {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  providerId: string;
+  rating: number; // 1 to 5
+  tags?: string[];
+  comment?: string | null;
+  reply?: string | null;
+  createdAt: string;
+  customer?: {
+    id: string;
+    fullName: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  value: number;
+  minOrderAmount: number;
+  maxDiscountAmount?: number | null;
+  usageLimit?: number | null;
+  usedCount: number;
+  expiresAt?: string | null;
+  isActive: boolean;
+}
+
+export interface RefundRecord {
+  id: string;
+  bookingId: string;
+  bookingRef?: string;
+  amount: number;
+  reason: string;
+  status: 'REQUESTED' | 'PROCESSING' | 'REFUNDED' | 'FAILED';
+  gatewayRefundId?: string | null;
+  deadline: string; // 48 hours deadline ISO string
+  processedAt?: string | null;
+  adminRemarks?: string | null;
+  createdAt: string;
+}
+
+export interface PayoutBatch {
+  id: string;
+  batchRef: string;
+  settlementDate: string;
+  totalAmount: number;
+  providerCount: number;
+  status: 'PENDING' | 'GENERATED' | 'PROCESSED' | 'FAILED';
+  processedAt?: string | null;
+  createdAt: string;
+  items?: PayoutItem[];
+}
+
+export interface PayoutItem {
+  id: string;
+  batchId: string;
+  providerId: string;
+  providerName?: string;
+  netAmount: number;
+  bankAccountRef?: string | null;
+  status: 'PENDING' | 'PAID' | 'FAILED';
+  bankTxRef?: string | null;
+  paidAt?: string | null;
+}
+
+export interface ProviderBankAccount {
+  id: string;
+  providerId: string;
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+export interface City {
+  id: string;
+  name: string;
+  state: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  isActive: boolean;
+  categories?: CityCategory[];
+}
+
+export interface CityCategory {
+  id: string;
+  cityId: string;
+  categoryId: string;
+  categoryName?: string;
+  isEnabled: boolean;
+}
+
+export interface SupportTicket {
+  id: string;
+  ticketRef: string;
+  userId: string;
+  userName?: string;
+  bookingId?: string | null;
+  bookingRef?: string | null;
+  category: 'DISPUTE' | 'PAYMENT' | 'CANCELLATION' | 'GENERAL';
+  subject: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  resolution?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages?: TicketMessage[];
+}
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  senderName?: string;
+  senderRole: 'CUSTOMER' | 'PROVIDER' | 'ADMIN';
+  message: string;
+  attachmentUrl?: string | null;
+  createdAt: string;
+}
+
+export interface SavedAddress {
+  id: string;
+  customerId: string;
+  label: string;
+  addressLine: string;
+  city: string;
+  pincode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isDefault: boolean;
+}
+
+export interface ProviderBranch {
+  id: string;
+  providerId: string;
+  name: string;
+  address: string;
+  city: string;
+  phone?: string | null;
+  isActive: boolean;
+}
+
+export interface ProviderStaff {
+  id: string;
+  providerId: string;
+  branchId?: string | null;
+  name: string;
+  specialty?: string | null;
+  photoUrl?: string | null;
+  workingDays?: string; // e.g. "Mon,Tue,Wed,Thu,Fri,Sat"
+  isActive: boolean;
+}
+

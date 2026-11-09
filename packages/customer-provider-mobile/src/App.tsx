@@ -5,10 +5,19 @@ import { AuthScreen } from './screens/AuthScreen';
 import { CustomerHomeScreen } from './screens/CustomerHomeScreen';
 import { CustomerBookingsScreen } from './screens/CustomerBookingsScreen';
 import { CustomerProfileScreen } from './screens/CustomerProfileScreen';
+import { CategoryProvidersScreen } from './screens/CategoryProvidersScreen';
+import { SearchScreen } from './screens/SearchScreen';
+import { CustomerSupportScreen } from './screens/CustomerSupportScreen';
 import { ProviderDashboardScreen } from './screens/ProviderDashboardScreen';
 import { ProviderAvailabilityScreen } from './screens/ProviderAvailabilityScreen';
 import { ProviderEarningsScreen } from './screens/ProviderEarningsScreen';
 import { ProviderProfileScreen } from './screens/ProviderProfileScreen';
+import { ProviderReviewsScreen } from './screens/ProviderReviewsScreen';
+import { ProviderBranchesScreen } from './screens/ProviderBranchesScreen';
+import { ProviderStaffScreen } from './screens/ProviderStaffScreen';
+import { ProviderBusinessDetailsScreen } from './screens/ProviderBusinessDetailsScreen';
+import { ProviderKycUploadScreen } from './screens/ProviderKycUploadScreen';
+import { ProviderKycStatusScreen } from './screens/ProviderKycStatusScreen';
 import {
   Compass,
   CalendarCheck,
@@ -26,6 +35,17 @@ const MobileNavigationContent: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isPhoneFrame, setIsPhoneFrame] = useState(true);
+
+  // Sub-screen navigation states
+  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+
+  // Provider sub-screen navigation states
+  const [providerSubScreen, setProviderSubScreen] = useState<
+    'none' | 'reviews' | 'branches' | 'staff' | 'kyc-step1' | 'kyc-step2' | 'kyc-status'
+  >('none');
+  const [onboardingBusinessData, setOnboardingBusinessData] = useState<any>(null);
 
   if (showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
@@ -49,7 +69,13 @@ const MobileNavigationContent: React.FC = () => {
           <span className="text-slate-400">Current Role:</span>
           <span className="font-bold text-brand-400">{activeRole}</span>
           <button
-            onClick={() => switchRole(activeRole === 'CUSTOMER' ? 'PROVIDER' : 'CUSTOMER')}
+            onClick={() => {
+              setSelectedCategory(null);
+              setShowSearch(false);
+              setShowSupport(false);
+              setProviderSubScreen('none');
+              switchRole(activeRole === 'CUSTOMER' ? 'PROVIDER' : 'CUSTOMER');
+            }}
             className="ml-2 px-2 py-0.5 rounded-md bg-brand-500 hover:bg-brand-600 text-charcoal-900 font-bold text-[10px] flex items-center gap-1 transition-all"
           >
             <Repeat className="w-3 h-3" />
@@ -80,7 +106,13 @@ const MobileNavigationContent: React.FC = () => {
           <div className="w-24 h-4 bg-slate-900 rounded-full mx-auto hidden sm:block" />
           <div className="flex items-center gap-1.5 text-[10px]">
             <span
-              onClick={() => switchRole(activeRole === 'CUSTOMER' ? 'PROVIDER' : 'CUSTOMER')}
+              onClick={() => {
+                setSelectedCategory(null);
+                setShowSearch(false);
+                setShowSupport(false);
+                setProviderSubScreen('none');
+                switchRole(activeRole === 'CUSTOMER' ? 'PROVIDER' : 'CUSTOMER');
+              }}
               className="cursor-pointer font-bold px-2 py-0.5 rounded-full bg-charcoal-900 text-brand-400 border border-slate-700"
             >
               {activeRole} ⇄
@@ -92,42 +124,106 @@ const MobileNavigationContent: React.FC = () => {
         <main className="flex-1 overflow-y-auto">
           {activeRole === 'CUSTOMER' ? (
             <>
-              {activeTab === 'home' && (
-                <CustomerHomeScreen
-                  onSelectCategory={() => {}}
-                  onNavigateToBookings={() => setActiveTab('bookings')}
+              {selectedCategory ? (
+                <CategoryProvidersScreen
+                  category={selectedCategory}
+                  onBack={() => setSelectedCategory(null)}
                 />
+              ) : showSupport ? (
+                <CustomerSupportScreen onBack={() => setShowSupport(false)} />
+              ) : (
+                <>
+                  {activeTab === 'home' && (
+                    <CustomerHomeScreen
+                      onSelectCategory={(cat) => setSelectedCategory(cat)}
+                      onNavigateToBookings={() => setActiveTab('bookings')}
+                      onOpenSearch={() => setShowSearch(true)}
+                    />
+                  )}
+                  {activeTab === 'bookings' && <CustomerBookingsScreen />}
+                  {activeTab === 'profile' && (
+                    <CustomerProfileScreen onOpenSupport={() => setShowSupport(true)} />
+                  )}
+                </>
               )}
-              {activeTab === 'bookings' && <CustomerBookingsScreen />}
-              {activeTab === 'profile' && <CustomerProfileScreen />}
             </>
           ) : (
             <>
-              {activeTab === 'home' && (
-                <ProviderDashboardScreen
-                  onNavigateToSchedule={() => setActiveTab('schedule')}
-                  onNavigateToEarnings={() => setActiveTab('earnings')}
+              {/* Provider Sub-screens */}
+              {showSupport ? (
+                <CustomerSupportScreen onBack={() => setShowSupport(false)} />
+              ) : providerSubScreen === 'reviews' ? (
+                <ProviderReviewsScreen onBack={() => setProviderSubScreen('none')} />
+              ) : providerSubScreen === 'branches' ? (
+                <ProviderBranchesScreen onBack={() => setProviderSubScreen('none')} />
+              ) : providerSubScreen === 'staff' ? (
+                <ProviderStaffScreen onBack={() => setProviderSubScreen('none')} />
+              ) : providerSubScreen === 'kyc-step1' ? (
+                <ProviderBusinessDetailsScreen
+                  onNext={(data) => {
+                    setOnboardingBusinessData(data);
+                    setProviderSubScreen('kyc-step2');
+                  }}
+                  onBack={() => setProviderSubScreen('none')}
                 />
+              ) : providerSubScreen === 'kyc-step2' ? (
+                <ProviderKycUploadScreen
+                  businessData={onboardingBusinessData}
+                  onSuccess={() => setProviderSubScreen('kyc-status')}
+                  onBack={() => setProviderSubScreen('kyc-step1')}
+                />
+              ) : providerSubScreen === 'kyc-status' ? (
+                <ProviderKycStatusScreen
+                  status={user?.providerProfile?.isVerified ? 'APPROVED' : 'PENDING'}
+                  onOpenCockpit={() => setProviderSubScreen('none')}
+                  onResubmit={() => setProviderSubScreen('kyc-step1')}
+                />
+              ) : (
+                <>
+                  {activeTab === 'home' && (
+                    <ProviderDashboardScreen
+                      onNavigateToSchedule={() => setActiveTab('schedule')}
+                      onNavigateToEarnings={() => setActiveTab('earnings')}
+                    />
+                  )}
+                  {activeTab === 'schedule' && (
+                    <ProviderAvailabilityScreen onBack={() => setActiveTab('home')} />
+                  )}
+                  {activeTab === 'earnings' && (
+                    <ProviderEarningsScreen onBack={() => setActiveTab('home')} />
+                  )}
+                  {activeTab === 'profile' && (
+                    <ProviderProfileScreen
+                      onOpenKyc={() => setProviderSubScreen('kyc-status')}
+                      onOpenReviews={() => setProviderSubScreen('reviews')}
+                      onOpenBranches={() => setProviderSubScreen('branches')}
+                      onOpenStaff={() => setProviderSubScreen('staff')}
+                      onOpenSupport={() => setShowSupport(true)}
+                    />
+                  )}
+                </>
               )}
-              {activeTab === 'schedule' && (
-                <ProviderAvailabilityScreen onBack={() => setActiveTab('home')} />
-              )}
-              {activeTab === 'earnings' && (
-                <ProviderEarningsScreen onBack={() => setActiveTab('home')} />
-              )}
-              {activeTab === 'profile' && <ProviderProfileScreen />}
             </>
           )}
         </main>
+
+        {/* Global Search Screen Modal */}
+        {showSearch && <SearchScreen onClose={() => setShowSearch(false)} />}
 
         {/* Role-Specific Bottom Navigation Bar */}
         <nav className="absolute bottom-0 inset-x-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-6 flex items-center justify-around z-40 select-none">
           {activeRole === 'CUSTOMER' ? (
             <>
               <button
-                onClick={() => setActiveTab('home')}
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowSupport(false);
+                  setActiveTab('home');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'home' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'home' && !selectedCategory && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <Compass className="w-5 h-5" />
@@ -135,9 +231,15 @@ const MobileNavigationContent: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('bookings')}
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowSupport(false);
+                  setActiveTab('bookings');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'bookings' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'bookings' && !selectedCategory && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <CalendarCheck className="w-5 h-5" />
@@ -145,9 +247,15 @@ const MobileNavigationContent: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('profile')}
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowSupport(false);
+                  setActiveTab('profile');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'profile' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'profile' && !selectedCategory && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <User className="w-5 h-5" />
@@ -157,9 +265,15 @@ const MobileNavigationContent: React.FC = () => {
           ) : (
             <>
               <button
-                onClick={() => setActiveTab('home')}
+                onClick={() => {
+                  setProviderSubScreen('none');
+                  setShowSupport(false);
+                  setActiveTab('home');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'home' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'home' && providerSubScreen === 'none' && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <LayoutDashboard className="w-5 h-5" />
@@ -167,9 +281,15 @@ const MobileNavigationContent: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('schedule')}
+                onClick={() => {
+                  setProviderSubScreen('none');
+                  setShowSupport(false);
+                  setActiveTab('schedule');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'schedule' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <Clock className="w-5 h-5" />
@@ -177,9 +297,15 @@ const MobileNavigationContent: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('earnings')}
+                onClick={() => {
+                  setProviderSubScreen('none');
+                  setShowSupport(false);
+                  setActiveTab('earnings');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'earnings' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <Coins className="w-5 h-5" />
@@ -187,9 +313,15 @@ const MobileNavigationContent: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('profile')}
+                onClick={() => {
+                  setProviderSubScreen('none');
+                  setShowSupport(false);
+                  setActiveTab('profile');
+                }}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'profile' ? 'text-brand-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === 'profile' && providerSubScreen === 'none' && !showSupport
+                    ? 'text-brand-600 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <User className="w-5 h-5" />
@@ -212,4 +344,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

@@ -111,6 +111,82 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
+// S-04 Profile Setup (First login only)
+app.post('/api/users/profile', authenticateToken, async (req, res) => {
+  try {
+    const { fullName, email, city, role } = req.body;
+    const userId = req.user!.userId;
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // 1. Update user identity
+      const u = await tx.user.update({
+        where: { id: userId },
+        data: {
+          fullName: fullName || undefined,
+          email: email || undefined,
+        },
+      });
+
+      // 2. Ensure customer profile always exists
+      await tx.customerProfile.upsert({
+        where: { userId },
+        update: { city: city || 'Mumbai' },
+        create: { userId, city: city || 'Mumbai' },
+      });
+
+      // 3. Ensure role item exists
+      const targetRole = role === 'PROVIDER' ? 'PROVIDER' : 'CUSTOMER';
+      await tx.userRoleItem.upsert({
+        where: { userId_role: { userId, role: targetRole } },
+        update: {},
+        create: { userId, role: targetRole },
+      });
+
+      return u;
+    });
+
+    res.json({ success: true, message: 'Profile updated successfully', user: updatedUser });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// C-14 Profile Edit & Update
+app.put('/api/users/me', authenticateToken, async (req, res) => {
+  try {
+    const { fullName, email, avatarUrl, city, defaultAddress } = req.body;
+    const userId = req.user!.userId;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        fullName: fullName || undefined,
+        email: email || undefined,
+        avatarUrl: avatarUrl || undefined,
+      },
+    });
+
+    if (city || defaultAddress) {
+      await prisma.customerProfile.upsert({
+        where: { userId },
+        update: {
+          city: city || undefined,
+          defaultAddress: defaultAddress || undefined,
+        },
+        create: {
+          userId,
+          city: city || 'Mumbai',
+          defaultAddress,
+        },
+      });
+    }
+
+    res.json({ success: true, message: 'User profile updated' });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 /* ==========================================================================
    CATALOG ROUTES (CATEGORIES & SERVICES)
    ========================================================================== */
@@ -309,6 +385,260 @@ app.get('/api/bookings/provider', authenticateToken, async (req, res) => {
   }
 });
 
+// P-09 Provider 5-Minute SLA Acceptance
+app.post('/api/provider/bookings/:id/accept', authenticateToken, async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { customer: { include: { user: true } }, service: true },
+    });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const updated = await BookingService.updateBookingStatus(
+      booking.id,
+      BookingStatus.CONFIRMED,
+      'Provider accepted booking request within 5-minute SLA',
+      req.user!.userId
+    );
+
+    // Notify customer
+    await prisma.notification.create({
+      data: {
+        userId: booking.customer.userId,
+        type: 'BOOKING_CONFIRMED',
+        title: 'Provider Confirmed Appointment! 🗓️',
+        message: `Your provider has accepted the request for ${booking.service.name} on ${booking.date} at ${booking.startTime}.`,
+        data: JSON.stringify({ bookingId: booking.id }),
+      },
+    });
+
+    res.json({ success: true, message: 'Booking accepted', data: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// P-09 Provider Reject Request
+app.post('/api/provider/bookings/:id/reject', authenticateToken, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { customer: { include: { user: true } }, service: true },
+    });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const updated = await BookingService.updateBookingStatus(
+      booking.id,
+      BookingStatus.DECLINED,
+      reason || 'Provider unavailable',
+      req.user!.userId
+    );
+
+    // Notify customer to view alternative providers
+    await prisma.notification.create({
+      data: {
+        userId: booking.customer.userId,
+        type: 'SYSTEM_ALERT',
+        title: 'Provider Unavailable 🔔',
+        message: 'The requested provider is unavailable. Your payment was not charged. Check alternative providers nearby.',
+        data: JSON.stringify({ bookingId: booking.id, showAlternatives: true }),
+      },
+    });
+
+    res.json({ success: true, message: 'Booking request rejected', data: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// C-10 Customer Self-Service Cancellation with 100% Refund
+app.post('/api/bookings/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { customer: true, provider: { include: { user: true } }, service: true },
+    });
+
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (booking.status === 'COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Completed appointments cannot be cancelled. Please raise a dispute ticket.' });
+    }
+
+    const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48-hour SLA deadline
+
+    const cancelled = await prisma.$transaction(async (tx) => {
+      // 1. Update booking status
+      const b = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'REFUNDED',
+          history: {
+            create: {
+              status: 'CANCELLED',
+              reason: reason || 'Customer requested cancellation with 100% refund',
+              changedBy: req.user!.userId,
+            },
+          },
+        },
+      });
+
+      // 2. Queue in refunds table
+      await tx.refund.upsert({
+        where: { bookingId: booking.id },
+        update: {
+          status: 'REQUESTED',
+          deadline,
+        },
+        create: {
+          bookingId: booking.id,
+          amount: booking.totalAmount,
+          reason: reason || '100% Customer Cancellation Guarantee',
+          status: 'REQUESTED',
+          deadline,
+        },
+      });
+
+      // 3. Reverse provider earning
+      await tx.providerEarning.deleteMany({
+        where: { bookingId: booking.id },
+      });
+
+      return b;
+    });
+
+    // Notify provider
+    await prisma.notification.create({
+      data: {
+        userId: booking.provider.userId,
+        type: 'BOOKING_CANCELLED',
+        title: 'Appointment Cancelled 🗓️',
+        message: `Client cancelled appointment for ${booking.service.name} on ${booking.date} at ${booking.startTime}. Time slot is now released.`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Appointment cancelled successfully. 100% refund will be credited to original payment method within 48 hours.',
+      data: cancelled,
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// C-11 Alternative Providers Lookup
+app.get('/api/bookings/:id/alternatives', authenticateToken, async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { service: true, provider: true },
+    });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const alternatives = await prisma.providerProfile.findMany({
+      where: {
+        id: { not: booking.providerId },
+        city: booking.provider.city,
+        verificationStatus: 'APPROVED',
+        isAcceptingBookings: true,
+      },
+      include: {
+        user: { select: { fullName: true, phone: true, avatarUrl: true } },
+      },
+      take: 5,
+    });
+
+    res.json({ success: true, data: alternatives });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// C-12 Customer Rate & Review
+app.post('/api/bookings/:id/review', authenticateToken, async (req, res) => {
+  try {
+    const { rating, tags, comment } = req.body;
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { customer: true, provider: true },
+    });
+
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (booking.status !== 'COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Reviews can only be submitted for completed appointments' });
+    }
+
+    const review = await prisma.$transaction(async (tx) => {
+      const r = await tx.review.create({
+        data: {
+          bookingId: booking.id,
+          customerId: booking.customerId,
+          providerId: booking.providerId,
+          rating: Number(rating) || 5.0,
+          tags: Array.isArray(tags) ? JSON.stringify(tags) : tags,
+          comment: comment ? String(comment).slice(0, 500) : null,
+        },
+      });
+
+      // Update provider rating average & count
+      const allReviews = await tx.review.findMany({
+        where: { providerId: booking.providerId },
+        select: { rating: true },
+      });
+
+      const count = allReviews.length;
+      const sum = allReviews.reduce((acc, curr) => acc + curr.rating, 0);
+      const avg = count > 0 ? Number((sum / count).toFixed(1)) : 5.0;
+
+      await tx.providerProfile.update({
+        where: { id: booking.providerId },
+        data: {
+          ratingAvg: avg,
+          ratingCount: count,
+        },
+      });
+
+      return r;
+    });
+
+    res.json({ success: true, message: 'Review submitted successfully', data: review });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// P-13 Provider Reviews List
+app.get('/api/provider/reviews', authenticateToken, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({
+      where: { userId: req.user!.userId },
+    });
+    if (!provider) return res.status(404).json({ success: false, message: 'Provider profile required' });
+
+    const reviews = await prisma.review.findMany({
+      where: { providerId: provider.id },
+      include: {
+        customer: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ratingAvg: provider.ratingAvg,
+        ratingCount: provider.ratingCount,
+        reviews,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.patch('/api/bookings/:id/status', authenticateToken, async (req, res) => {
   try {
     const { status, reason } = req.body;
@@ -455,7 +785,53 @@ app.get('/api/provider/earnings', authenticateToken, async (req, res) => {
    ADMIN MANAGEMENT ROUTES
    ========================================================================== */
 
-app.get('/api/admin/metrics', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]), async (req, res) => {
+// A-01 Admin Login
+app.post('/api/admin/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email or phone required' });
+    const result = await AuthService.adminLogin(email, password);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(401).json({ success: false, message: err.message });
+  }
+});
+
+// A-16 Admin Users List
+app.get('/api/admin/users', authenticateToken, requireRole([UserRole.SUPERADMIN, UserRole.ADMIN]), async (req, res) => {
+  try {
+    const users = await AuthService.listAdminUsers();
+    res.json({ success: true, data: users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// A-16 Invite Admin User
+app.post('/api/admin/users', authenticateToken, requireRole([UserRole.SUPERADMIN]), async (req, res) => {
+  try {
+    const { email, fullName, phone, role } = req.body;
+    if (!email || !fullName || !role) {
+      return res.status(400).json({ success: false, message: 'email, fullName, and role are required' });
+    }
+    const user = await AuthService.inviteAdminUser(email, fullName, phone || '+910000000000', role);
+    res.json({ success: true, message: 'Admin invited successfully', data: user });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// A-16 Update Admin User
+app.patch('/api/admin/users/:id', authenticateToken, requireRole([UserRole.SUPERADMIN]), async (req, res) => {
+  try {
+    const user = await AuthService.updateAdminUser(req.params.id, req.body);
+    res.json({ success: true, message: 'Admin user updated', data: user });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/admin/metrics', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.OPERATIONS_ADMIN, UserRole.FINANCE_ADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
   try {
     const metrics = await AdminService.getDashboardMetrics();
     res.json({ success: true, data: metrics });
@@ -521,7 +897,7 @@ app.post('/api/admin/commission', authenticateToken, requireRole([UserRole.ADMIN
   }
 });
 
-app.get('/api/admin/audit-logs', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]), async (req, res) => {
+app.get('/api/admin/audit-logs', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
   try {
     const logs = await AdminService.getAuditLogs();
     res.json({ success: true, data: logs });
@@ -529,6 +905,278 @@ app.get('/api/admin/audit-logs', authenticateToken, requireRole([UserRole.ADMIN,
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// A-06 Customers Management
+app.get('/api/admin/customers', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.OPERATIONS_ADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
+  try {
+    const customers = await AdminService.getCustomers(req.query.search as string);
+    res.json({ success: true, data: customers });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.patch('/api/admin/customers/:id/status', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]), async (req, res) => {
+  try {
+    const { isActive } = req.body;
+    const updated = await AdminService.updateCustomerStatus(req.params.id, Boolean(isActive), req.user!.userId);
+    res.json({ success: true, message: 'Customer status updated', data: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// A-09 Rate Card Approvals
+app.get('/api/admin/rates', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.OPERATIONS_ADMIN]), async (req, res) => {
+  try {
+    const rates = await AdminService.getPendingRates();
+    res.json({ success: true, data: rates });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/rates/:id/decision', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.OPERATIONS_ADMIN]), async (req, res) => {
+  try {
+    const { action, reason } = req.body;
+    const rate = await AdminService.decideRateCard(req.params.id, action, req.user!.userId, reason);
+    res.json({ success: true, message: `Rate card ${action.toLowerCase()}d`, data: rate });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// A-11 Refunds Queue
+app.get('/api/admin/refunds', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.FINANCE_ADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
+  try {
+    const refunds = await AdminService.getRefunds();
+    res.json({ success: true, data: refunds });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// A-13 Payouts (T+1 Batch Settlement)
+app.get('/api/admin/payouts', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.FINANCE_ADMIN]), async (req, res) => {
+  try {
+    const payouts = await AdminService.getPayouts();
+    res.json({ success: true, data: payouts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/payouts/generate', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.FINANCE_ADMIN]), async (req, res) => {
+  try {
+    const batch = await AdminService.generatePayoutBatch(req.user!.userId);
+    res.json({ success: true, message: 'Payout batch generated', data: batch });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/payouts/:id/mark-paid', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.FINANCE_ADMIN]), async (req, res) => {
+  try {
+    const { bankTxRef } = req.body;
+    const item = await AdminService.markPayoutPaid(req.params.id, bankTxRef || `TXN-${Date.now()}`, req.user!.userId);
+    res.json({ success: true, message: 'Payout item marked as paid', data: item });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// A-14 Support & Disputes
+app.get('/api/admin/support/tickets', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
+  try {
+    const tickets = await AdminService.getSupportTickets(req.query.status as string);
+    res.json({ success: true, data: tickets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/support/tickets/:id/resolve', authenticateToken, requireRole([UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.SUPPORT_ADMIN]), async (req, res) => {
+  try {
+    const { resolution } = req.body;
+    const ticket = await AdminService.resolveSupportTicket(req.params.id, resolution || 'Resolved by Administrator', req.user!.userId);
+    res.json({ success: true, message: 'Support ticket resolved', data: ticket });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// C-14 / P-14 User Support Ticket Endpoints
+app.get('/api/support/tickets', authenticateToken, async (req, res) => {
+  try {
+    const tickets = await prisma.supportTicket.findMany({
+      where: { userId: req.user!.userId },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    res.json({ success: true, data: tickets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/support/tickets', authenticateToken, async (req, res) => {
+  try {
+    const { category, subject, description, bookingId, priority } = req.body;
+    if (!category || !subject || !description) {
+      return res.status(400).json({ success: false, message: 'Category, subject, and description are required' });
+    }
+
+    const ticketNumber = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
+    const roleString = req.user!.activeRole || req.user!.roles[0] || 'CUSTOMER';
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        ticketRef: ticketNumber,
+        userId: req.user!.userId,
+        bookingId: bookingId || null,
+        category,
+        subject,
+        priority: priority || 'NORMAL',
+        status: 'OPEN',
+        messages: {
+          create: {
+            senderId: req.user!.userId,
+            senderRole: roleString,
+            message: description,
+          },
+        },
+      },
+      include: { messages: true },
+    });
+
+    res.status(201).json({ success: true, message: 'Ticket created successfully', data: ticket });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/support/tickets/:id/reply', authenticateToken, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ success: false, message: 'Message content is required' });
+    }
+
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    // Only ticket creator or admins can reply
+    const isAdmin = req.user!.roles.some(r => [UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.SUPPORT_ADMIN].includes(r as any));
+    if (ticket.userId !== req.user!.userId && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Unauthorized access to ticket' });
+    }
+
+    const roleString = req.user!.activeRole || req.user!.roles[0] || 'CUSTOMER';
+    const reply = await prisma.ticketMessage.create({
+      data: {
+        ticketId: ticket.id,
+        senderId: req.user!.userId,
+        senderRole: roleString,
+        message,
+      },
+    });
+
+    // Update ticket status if admin replied or customer replied
+    await prisma.supportTicket.update({
+      where: { id: ticket.id },
+      data: {
+        status: isAdmin ? 'IN_REVIEW' : ticket.status,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, data: reply });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// P-05 Provider Branches
+app.get('/api/provider/branches', authenticateToken, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user!.userId } });
+    if (!provider) return res.status(404).json({ success: false, message: 'Provider profile not found' });
+
+    const branches = await prisma.providerBranch.findMany({
+      where: { providerId: provider.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ success: true, data: branches });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/provider/branches', authenticateToken, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user!.userId } });
+    if (!provider) return res.status(404).json({ success: false, message: 'Provider profile not found' });
+
+    const { name, address, city, phone } = req.body;
+    const branch = await prisma.providerBranch.create({
+      data: {
+        providerId: provider.id,
+        name,
+        address,
+        city,
+        phone,
+      },
+    });
+    res.status(201).json({ success: true, data: branch });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// P-06 Provider Staff
+app.get('/api/provider/staff', authenticateToken, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user!.userId } });
+    if (!provider) return res.status(404).json({ success: false, message: 'Provider profile not found' });
+
+    const staff = await prisma.providerStaff.findMany({
+      where: { providerId: provider.id },
+      include: { branch: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json({ success: true, data: staff });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/provider/staff', authenticateToken, async (req, res) => {
+  try {
+    const provider = await prisma.providerProfile.findUnique({ where: { userId: req.user!.userId } });
+    if (!provider) return res.status(404).json({ success: false, message: 'Provider profile not found' });
+
+    const { name, specialty, branchId, workingDays } = req.body;
+    const staffMember = await prisma.providerStaff.create({
+      data: {
+        providerId: provider.id,
+        name,
+        specialty,
+        workingDays: workingDays || 'Mon,Tue,Wed,Thu,Fri,Sat',
+        branchId: branchId || null,
+      },
+    });
+    res.status(201).json({ success: true, data: staffMember });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
 
 /* ==========================================================================
    IN-APP NOTIFICATIONS

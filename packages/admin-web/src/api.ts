@@ -46,6 +46,36 @@ class ApiClient {
   }
 
   // Auth
+  async adminLogin(email: string, password?: string) {
+    const res = await this.request('/admin/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.accessToken) {
+      this.setToken(res.accessToken);
+      localStorage.setItem('qa_admin_user', JSON.stringify(res.user));
+    }
+    return res;
+  }
+
+  async getAdminUsers() {
+    return this.request('/admin/users');
+  }
+
+  async inviteAdminUser(data: { email: string; fullName: string; phone?: string; role: string }) {
+    return this.request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminUser(id: string, data: any) {
+    return this.request(`/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   async loginWithOtp(phone: string, otp: string) {
     const res = await this.request('/auth/otp/verify', {
       method: 'POST',
@@ -116,6 +146,65 @@ class ApiClient {
   // Audit Logs
   async getAuditLogs() {
     return this.request('/admin/audit-logs');
+  }
+
+  // Customers (A-06)
+  async getCustomers(search?: string) {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request(`/admin/customers${query}`);
+  }
+
+  async updateCustomerStatus(id: string, isActive: boolean) {
+    return this.request(`/admin/customers/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
+  // Rate Card Approvals (A-09)
+  async getPendingRates() {
+    return this.request('/admin/rates');
+  }
+
+  async decideRateCard(id: string, action: 'APPROVE' | 'REJECT', reason?: string) {
+    return this.request(`/admin/rates/${id}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ action, reason }),
+    });
+  }
+
+  // Refunds (A-11)
+  async getRefunds() {
+    return this.request('/admin/refunds');
+  }
+
+  // Payouts T+1 (A-13)
+  async getPayouts() {
+    return this.request('/admin/payouts');
+  }
+
+  async generatePayoutBatch() {
+    return this.request('/admin/payouts/generate', { method: 'POST' });
+  }
+
+  async markPayoutPaid(id: string, bankTxRef: string) {
+    return this.request(`/admin/payouts/${id}/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify({ bankTxRef }),
+    });
+  }
+
+  // Support & Disputes (A-14)
+  async getSupportTickets(status?: string) {
+    const query = status ? `?status=${status}` : '';
+    return this.request(`/admin/support/tickets${query}`);
+  }
+
+  async resolveSupportTicket(id: string, resolution: string) {
+    return this.request(`/admin/support/tickets/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution }),
+    });
   }
 }
 

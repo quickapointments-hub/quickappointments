@@ -54,7 +54,7 @@ export const ProviderEarningsScreen: React.FC<{ onBack: () => void }> = ({ onBac
             <p className="font-bold text-white mt-0.5">₹{(earnings.totalGross || 0).toLocaleString()}</p>
           </div>
           <div>
-            <span className="text-slate-400">Platform Commission (10%)</span>
+            <span className="text-slate-400">Platform Commission (5%)</span>
             <p className="font-bold text-slate-300 mt-0.5">₹{(earnings.totalPlatformFee || 0).toLocaleString()}</p>
           </div>
         </div>
