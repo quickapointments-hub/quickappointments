@@ -16,15 +16,29 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.quickappointments.app"
+      "bundleIdentifier": "com.quickappointments.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Quick Appointments requires your location to discover nearby specialists and providers.",
+        "NSCameraUsageDescription": "Quick Appointments requires camera access to upload identity proof and KYC documents.",
+        "NSPhotoLibraryUsageDescription": "Quick Appointments requires photo library access to upload documents."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./public/logo.png",
         "backgroundColor": "#111114"
       },
-      "package": "com.quickappointments.app"
+      "package": "com.quickappointments.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS"
+      ]
     },
+    "scheme": "quickappointments",
     "web": {
       "favicon": "./public/logo.png",
       "bundler": "metro"
