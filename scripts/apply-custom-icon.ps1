@@ -1,4 +1,4 @@
-﻿Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Drawing
 
 $srcPath = "C:/Users/lenovo/.gemini/antigravity/brain/8daf8365-6c52-4b3c-b71b-518484236fb6/.user_uploaded/media_1794216666215_10635f38.jpg"
 $baseDir = "E:/Bizools/Qucik Appoptiment/packages/customer-provider-mobile"
@@ -52,3 +52,4 @@ foreach ($d in $densities) {
 
 $srcImg.Dispose()
 Write-Host "✅ All custom app icons successfully generated and applied!"
+
