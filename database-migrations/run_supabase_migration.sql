@@ -682,6 +682,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Ensure required columns exist on slot_reservations and bookings
+ALTER TABLE IF EXISTS slot_reservations ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'HELD';
+ALTER TABLE IF EXISTS slot_reservations ADD COLUMN IF NOT EXISTS reservation_token VARCHAR(64);
+
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'slot_reservations' AND column_name = 'is_released') THEN
+        UPDATE slot_reservations SET status = 'RELEASED' WHERE is_released = TRUE AND status = 'HELD';
+    END IF;
+END $$;
+
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE IF EXISTS bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+ALTER TABLE IF EXISTS bookings ADD CONSTRAINT bookings_status_check 
+CHECK (status IN ('PENDING', 'AWAITING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DECLINED', 'EXPIRED', 'RESCHEDULED'));
+
 -- Unique active reservation lock
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_slot_reservation 
 ON slot_reservations(provider_id, date, start_time) 

@@ -255,6 +255,8 @@ CREATE TABLE IF NOT EXISTS slot_reservations (
     end_time VARCHAR(10) NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     is_released BOOLEAN DEFAULT FALSE,
+    status VARCHAR(20) DEFAULT 'HELD',
+    reservation_token VARCHAR(64),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_slot_reservations_concurrency 
