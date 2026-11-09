@@ -161,6 +161,14 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pendingJob, slaCountdown]);
 
+  // Status bar styling
+  useEffect(() => {
+    StatusBar.setBarStyle('light-content', true);
+    if ((StatusBar as any).setBackgroundColor) {
+      (StatusBar as any).setBackgroundColor(COLORS.bg, true);
+    }
+  }, []);
+
   // Auth Handler
   const handleSendOtp = () => {
     if (!phoneNumber || phoneNumber.length < 10) {
@@ -288,7 +296,6 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
         <ScrollView contentContainerStyle={styles.authScroll}>
           <View style={styles.brandContainer}>
             <View style={styles.brandIconWrapper}>
@@ -417,8 +424,6 @@ export default function App() {
   // ----------------------------------------------------
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-
       {/* Top Header & Role Switcher */}
       <View style={styles.topHeader}>
         <View style={styles.topHeaderLeft}>
@@ -1578,6 +1583,26 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
     marginBottom: 16,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 32,
   },
   bookingCard: {
     backgroundColor: COLORS.card,
