@@ -2,7 +2,7 @@
   "name": "@quick-appointments/customer-provider-mobile",
   "version": "1.0.0",
   "private": true,
-  "main": "App.tsx",
+  "main": "index.js",
   "type": "module",
   "scripts": {
     "dev": "vite",

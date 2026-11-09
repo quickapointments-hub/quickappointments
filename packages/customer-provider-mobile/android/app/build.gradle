@@ -16,11 +16,16 @@ react {
         resolvedEntryFile = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, nodeSearchDir).text.trim()
     } catch (Exception e) {}
     if (!resolvedEntryFile) {
-        def candidate = new File(projectRoot, "App.tsx")
+        def candidate = new File(projectRoot, "index.js")
         if (candidate.exists()) {
             resolvedEntryFile = candidate.getAbsolutePath()
         } else {
-            resolvedEntryFile = new File(projectRoot, "index.js").getAbsolutePath()
+            candidate = new File(projectRoot, "App.tsx")
+            if (candidate.exists()) {
+                resolvedEntryFile = candidate.getAbsolutePath()
+            } else {
+                resolvedEntryFile = new File(projectRoot, "src/App.tsx").getAbsolutePath()
+            }
         }
     }
     entryFile = file(resolvedEntryFile)

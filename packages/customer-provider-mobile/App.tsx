@@ -12,7 +12,9 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
+import { registerRootComponent } from 'expo';
 import { supabase } from './src/supabase';
 
 // Brand tokens
@@ -296,7 +298,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.authScroll}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
           <View style={styles.brandContainer}>
             <View style={styles.brandIconWrapper}>
               <Text style={styles.brandIconText}>⚡</Text>
@@ -1198,6 +1200,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   body: {
     flex: 1,
@@ -1211,7 +1214,7 @@ const styles = StyleSheet.create({
   authScroll: {
     padding: 24,
     justifyContent: 'center',
-    minHeight: '100%',
+    flexGrow: 1,
   },
   brandContainer: {
     alignItems: 'center',
@@ -2354,3 +2357,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 });
+
+try {
+  registerRootComponent(App);
+} catch (e) {
+  // Ignore if already registered
+}
