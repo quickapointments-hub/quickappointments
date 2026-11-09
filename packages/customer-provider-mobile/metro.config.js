@@ -16,4 +16,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
+// 3. Force single instance of React 19 and React Native 0.88
+config.resolver.extraNodeModules = {
+  react: path.resolve(monorepoRoot, 'node_modules/react'),
+  'react-native': path.resolve(monorepoRoot, 'node_modules/react-native'),
+};
+
 module.exports = config;
