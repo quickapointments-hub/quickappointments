@@ -648,3 +648,171 @@ CREATE TABLE IF NOT EXISTS provider_staff (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_provider_staff_provider_id ON provider_staff(provider_id);
+
+-- ============================================================================
+-- STEP 5: COMPREHENSIVE RLS POLICIES & CONCURRENCY RPCS
+-- ============================================================================
+
+ALTER TABLE IF EXISTS reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS refunds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS payout_batches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS payout_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS provider_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS cities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS city_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS ticket_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS device_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS saved_addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS provider_branches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS provider_staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS commission_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS payment_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION current_user_is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM user_roles
+        WHERE user_id = auth.uid()
+        AND role IN ('ADMIN', 'SUPERADMIN')
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Unique active reservation lock
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_slot_reservation 
+ON slot_reservations(provider_id, date, start_time) 
+WHERE status = 'HELD';
+
+-- RPC: Reserve Slot (5-Minute Hold)
+CREATE OR REPLACE FUNCTION reserve_slot_rpc(
+    p_provider_id UUID,
+    p_service_id UUID,
+    p_customer_id UUID,
+    p_date DATE,
+    p_start_time VARCHAR(10)
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_existing_booking UUID;
+    v_existing_hold UUID;
+    v_token VARCHAR(64);
+    v_expires_at TIMESTAMPTZ;
+    v_new_id UUID;
+BEGIN
+    SELECT id INTO v_existing_booking
+    FROM bookings
+    WHERE provider_id = p_provider_id
+      AND date = p_date
+      AND start_time = p_start_time
+      AND status NOT IN ('CANCELLED', 'RELEASED', 'DECLINED', 'EXPIRED')
+    LIMIT 1;
+
+    IF v_existing_booking IS NOT NULL THEN
+        RETURN jsonb_build_object('success', false, 'code', 'SLOT_TAKEN', 'message', 'This slot is already booked');
+    END IF;
+
+    SELECT id INTO v_existing_hold
+    FROM slot_reservations
+    WHERE provider_id = p_provider_id
+      AND date = p_date
+      AND start_time = p_start_time
+      AND status = 'HELD'
+      AND expires_at > NOW()
+    LIMIT 1;
+
+    IF v_existing_hold IS NOT NULL THEN
+        RETURN jsonb_build_object('success', false, 'code', 'SLOT_HELD', 'message', 'Slot is temporarily held by another customer');
+    END IF;
+
+    v_token := encode(gen_random_bytes(24), 'hex');
+    v_expires_at := NOW() + INTERVAL '5 minutes';
+    v_new_id := gen_random_uuid();
+
+    INSERT INTO slot_reservations (
+        id, provider_id, service_id, customer_id, date, start_time,
+        reservation_token, status, expires_at, created_at
+    ) VALUES (
+        v_new_id, p_provider_id, p_service_id, p_customer_id, p_date, p_start_time,
+        v_token, 'HELD', v_expires_at, NOW()
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'reservationToken', v_token,
+        'expiresAt', v_expires_at,
+        'holdDurationSeconds', 300
+    );
+EXCEPTION WHEN unique_violation THEN
+    RETURN jsonb_build_object('success', false, 'code', 'SLOT_TAKEN', 'message', 'Contested slot was just reserved by another user');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Verify Service OTP
+CREATE OR REPLACE FUNCTION verify_service_otp_rpc(
+    p_booking_id UUID,
+    p_otp VARCHAR(6)
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_booking RECORD;
+BEGIN
+    SELECT * INTO v_booking FROM bookings WHERE id = p_booking_id;
+
+    IF v_booking IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Booking not found');
+    END IF;
+
+    IF v_booking.status = 'COMPLETED' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Booking is already completed');
+    END IF;
+
+    IF v_booking.service_otp != p_otp THEN
+        RETURN jsonb_build_object('success', false, 'code', 'INVALID_OTP', 'message', 'Invalid 6-digit OTP code');
+    END IF;
+
+    UPDATE bookings
+    SET status = 'COMPLETED',
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Service verified and appointment completed');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: 100% Cancellation & Refund
+CREATE OR REPLACE FUNCTION cancel_booking_refund_rpc(
+    p_booking_id UUID,
+    p_reason TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_booking RECORD;
+BEGIN
+    SELECT * INTO v_booking FROM bookings WHERE id = p_booking_id;
+
+    IF v_booking IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Booking not found');
+    END IF;
+
+    UPDATE bookings
+    SET status = 'CANCELLED',
+        cancellation_reason = p_reason,
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    INSERT INTO refunds (
+        id, booking_id, amount, reason, status, deadline, created_at
+    ) VALUES (
+        gen_random_uuid(), p_booking_id, v_booking.total_amount, p_reason, 'REQUESTED', NOW() + INTERVAL '48 hours', NOW()
+    );
+
+    DELETE FROM provider_earnings WHERE booking_id = p_booking_id;
+
+    RETURN jsonb_build_object('success', true, 'message', '100% refund initiated.');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
