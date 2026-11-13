@@ -107,6 +107,15 @@ FOR ALL USING (
     OR current_user_is_admin()
 );
 
+-- Cities & Service Locations (Public read active, Admin manage)
+DROP POLICY IF EXISTS "Public Read Active Cities" ON cities;
+CREATE POLICY "Public Read Active Cities" ON cities
+FOR SELECT USING (is_active = true);
+
+DROP POLICY IF EXISTS "Admins Manage Cities" ON cities;
+CREATE POLICY "Admins Manage Cities" ON cities
+FOR ALL USING (current_user_is_admin());
+
 -- Saved Addresses (Customer only)
 DROP POLICY IF EXISTS "Customers Manage Own Saved Addresses" ON saved_addresses;
 CREATE POLICY "Customers Manage Own Saved Addresses" ON saved_addresses

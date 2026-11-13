@@ -16,3 +16,48 @@
   background: #111114;
 }
 
+@keyframes qa-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes qa-float-slow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(4deg);
+  }
+}
+
+@keyframes qa-pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.16);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.16);
+    opacity: 0;
+  }
+}
+
+.animate-qa-shimmer {
+  animation: qa-shimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-qa-float {
+  animation: qa-float-slow 6s ease-in-out infinite;
+}
+
+.animate-qa-pulse-ring {
+  animation: qa-pulse-ring 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+

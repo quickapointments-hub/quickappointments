@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -96,9 +96,9 @@ model ProviderProfile {
   experienceYears     Int                @default(1)
   ratingAvg           Float              @default(5.0)
   ratingCount         Int                @default(0)
-  verificationStatus  String             @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  verificationStatus  String             @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED, NEEDS_INFO
   rejectionReason     String?
-  isAcceptingBookings Boolean            @default(true)
+  isAcceptingBookings Boolean            @default(false)
   city                String
   address             String
   latitude            Float?

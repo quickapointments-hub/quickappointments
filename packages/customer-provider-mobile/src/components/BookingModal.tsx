@@ -37,7 +37,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [availableProviders, setAvailableProviders] = useState<any[]>([]);
   const [awaitingBooking, setAwaitingBooking] = useState<any>(null);
   const [showAlternatives, setShowAlternatives] = useState(false);
-  
+
   // Date calculation: Default tomorrow (or next open weekday)
   const getNextAvailableDate = () => {
     const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -161,44 +161,22 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
   };
 
-  // Confirm Booking
-  const handleConfirmBooking = async (mockData?: { txnId: string; orderId: string; amount: number; dateTime: string }) => {
+  // Confirm Booking strictly via Backend API (no local fake booking fallback)
+  const handleConfirmBooking = async (paymentData?: { txnId: string; orderId: string; amount: number; dateTime: string }) => {
     if (!reservation) return;
     try {
       setConfirming(true);
-      const chosenPaymentMethod = mockData ? 'RAZORPAY' : paymentMethod;
-      let resBooking: any;
-      try {
-        const res = await mobileApi.confirmBooking(
-          reservation.id,
-          chosenPaymentMethod,
-          notes,
-          mockData?.txnId,
-          mockData?.orderId
-        );
-        resBooking = res.data;
-      } catch (backendErr) {
-        // Fallback for development/testing mock mode if backend is offline
-        const totalAmount = service.basePrice + Math.round(service.basePrice * 0.05);
-        resBooking = {
-          id: 'booking_' + Date.now(),
-          bookingRef: `QA-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
-          serviceOtp: '123456',
-          service,
-          provider: selectedProvider,
-          date: reservation.date,
-          startTime: reservation.startTime,
-          totalAmount,
-          status: 'CONFIRMED',
-          paymentMethod: chosenPaymentMethod,
-          paymentStatus: 'PAID',
-          paymentTx: {
-            gatewayTxId: mockData?.txnId || `pay_mock_${Date.now()}`,
-            orderId: mockData?.orderId || `order_mock_${Date.now()}`,
-            status: 'SUCCESS',
-            gateway: chosenPaymentMethod,
-          },
-        };
+      const chosenPaymentMethod = paymentData ? 'RAZORPAY' : paymentMethod;
+      const res = await mobileApi.confirmBooking(
+        reservation.id,
+        chosenPaymentMethod,
+        notes,
+        paymentData?.txnId,
+        paymentData?.orderId
+      );
+      const resBooking = res.data;
+      if (!resBooking) {
+        throw new Error('Booking confirmation returned empty payload.');
       }
       setConfirmedBooking(resBooking);
       // Initiate 5-minute provider SLA state
@@ -210,33 +188,39 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
   };
 
-  // Mock Razorpay Payment Submission Simulation
-  const handlePayWithRazorpay = () => {
-    setSimulatingPayment(true);
-    setTimeout(() => {
-      const generatedTxnId = `pay_mock_${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      const generatedOrderId = `order_mock_${Math.floor(100000 + Math.random() * 900000)}`;
+  // Create Payment Order via Backend Razorpay integration
+  const handlePayWithRazorpay = async () => {
+    try {
+      setSimulatingPayment(true);
       const totalAmount = service.basePrice + Math.round(service.basePrice * 0.05);
+      const orderRes = await mobileApi.createPaymentOrder(totalAmount, reservation?.id);
+      const order = orderRes?.data || orderRes;
       const now = new Date();
-      const formattedDate = now.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }) + ', ' + now.toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
+      const formattedDate =
+        now.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }) +
+        ', ' +
+        now.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
 
       setMockPayment({
-        txnId: generatedTxnId,
-        orderId: generatedOrderId,
-        amount: totalAmount,
+        txnId: order?.paymentId || order?.razorpayPaymentId || `pay_${order?.id || Date.now()}`,
+        orderId: order?.id || order?.orderId || `order_${Date.now()}`,
+        amount: order?.amount ? Number(order.amount) / (order?.currency === 'INR' && Number(order.amount) > totalAmount * 10 ? 100 : 1) : totalAmount,
         dateTime: formattedDate,
       });
+      setStep(2.5);
+    } catch (err: any) {
+      alert(`Payment order creation failed: ${err.message}`);
+    } finally {
       setSimulatingPayment(false);
-      setStep(2.5); // Display Mock Payment Success Screen
-    }, 1200);
+    }
   };
 
   const minutesRemaining = Math.floor(countdownSeconds / 60);
@@ -252,8 +236,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               {step === 3
                 ? 'Appointment Confirmed! 🎉'
                 : step === 2.5
-                ? 'Payment Successful'
-                : 'Book Appointment'}
+                  ? 'Payment Successful'
+                  : 'Book Appointment'}
             </h3>
             <p className="text-xs text-slate-500 font-medium">{service.name}</p>
           </div>
@@ -279,11 +263,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <div
                       key={p.id}
                       onClick={() => setSelectedProvider(p)}
-                      className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between ${
-                        selectedProvider?.id === p.id
-                          ? 'border-brand-500 bg-brand-50/50 font-bold text-brand-800'
-                          : 'border-slate-200 text-slate-700'
-                      }`}
+                      className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between ${selectedProvider?.id === p.id
+                        ? 'border-brand-500 bg-brand-50/50 font-bold text-brand-800'
+                        : 'border-slate-200 text-slate-700'
+                        }`}
                     >
                       <span>{p.businessName || p.user?.fullName}</span>
                       <span className="text-[11px] text-slate-400">★ {p.ratingAvg}</span>
@@ -340,11 +323,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                       key={idx}
                       disabled={!s.isAvailable || reserving}
                       onClick={() => handleHoldSlot(s.time)}
-                      className={`py-2 px-1 text-xs rounded-xl font-bold font-mono transition-all text-center ${
-                        !s.isAvailable
-                          ? 'bg-slate-100 text-slate-400 line-through cursor-not-allowed border border-slate-100'
-                          : 'bg-white border border-slate-200 hover:border-brand-500 text-slate-800 hover:bg-brand-50 shadow-sm'
-                      }`}
+                      className={`py-2 px-1 text-xs rounded-xl font-bold font-mono transition-all text-center ${!s.isAvailable
+                        ? 'bg-slate-100 text-slate-400 line-through cursor-not-allowed border border-slate-100'
+                        : 'bg-white border border-slate-200 hover:border-brand-500 text-slate-800 hover:bg-brand-50 shadow-sm'
+                        }`}
                     >
                       {s.time}
                     </button>
@@ -424,11 +406,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CASH_ON_SERVICE')}
-                  className={`p-3 rounded-xl border text-left font-semibold flex items-center gap-2 ${
-                    paymentMethod === 'CASH_ON_SERVICE'
-                      ? 'border-brand-500 bg-brand-50 text-brand-800'
-                      : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-left font-semibold flex items-center gap-2 ${paymentMethod === 'CASH_ON_SERVICE'
+                    ? 'border-brand-500 bg-brand-50 text-brand-800'
+                    : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <CreditCard className="w-4 h-4 text-brand-600" />
                   <span>Pay on Service</span>
@@ -436,11 +417,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('RAZORPAY')}
-                  className={`p-3 rounded-xl border text-left font-semibold flex items-center gap-2 ${
-                    paymentMethod === 'RAZORPAY'
-                      ? 'border-brand-500 bg-brand-50 text-brand-800'
-                      : 'border-slate-200 text-slate-600'
-                  }`}
+                  className={`p-3 rounded-xl border text-left font-semibold flex items-center gap-2 ${paymentMethod === 'RAZORPAY'
+                    ? 'border-brand-500 bg-brand-50 text-brand-800'
+                    : 'border-slate-200 text-slate-600'
+                    }`}
                 >
                   <ShieldCheck className="w-4 h-4 text-brand-600" />
                   <span>Razorpay / UPI</span>
@@ -574,29 +554,29 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
 
             {/* Anti-Fraud 6-Digit Customer OTP Display (C-08) */}
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 text-center space-y-1 shadow-sm">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center justify-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+            <div className="p-4 rounded-2xl bg-[#EFF8E7] border border-[#65B32E] text-center space-y-1 shadow-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#65B32E]" />
                 <span>6-Digit Service Delivery OTP</span>
               </span>
-              <div className="font-mono text-2xl font-black text-amber-950 tracking-widest py-0.5">
-                {confirmedBooking.serviceOtp || '123456'}
+              <div className="font-mono text-2xl font-black text-[#111111] tracking-widest py-0.5">
+                {confirmedBooking.serviceOtp || '------'}
               </div>
-              <p className="text-[10px] text-amber-700">
-                Keep this secure. Share this code with your specialist only when they arrive for service delivery.
+              <p className="text-[10px] text-[#4B5563] font-medium">
+                Keep this code secure. Share it with your specialist only upon completed service delivery.
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-left space-y-1.5">
-              <p className="text-slate-600">
-                <span className="font-semibold text-slate-900">Service:</span> {service.name}
+            <div className="p-4 rounded-2xl bg-[#FAF8F0] border border-[#E8E4D9] text-xs text-left space-y-1.5">
+              <p className="text-[#4B5563]">
+                <span className="font-bold text-[#111111]">Service:</span> {service.name}
               </p>
-              <p className="text-slate-600">
-                <span className="font-semibold text-slate-900">Scheduled:</span>{' '}
+              <p className="text-[#4B5563]">
+                <span className="font-bold text-[#111111]">Scheduled:</span>{' '}
                 {confirmedBooking.date} @ {confirmedBooking.startTime}
               </p>
-              <p className="text-slate-600">
-                <span className="font-semibold text-slate-900">Total Charged:</span> ₹
+              <p className="text-[#4B5563]">
+                <span className="font-bold text-[#111111]">Total Charged:</span> ₹
                 {confirmedBooking.totalAmount}
               </p>
             </div>
@@ -606,7 +586,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 onSuccess(confirmedBooking);
                 onClose();
               }}
-              className="w-full py-2.5 rounded-xl bg-charcoal-900 hover:bg-black text-white text-xs font-semibold"
+              className="w-full py-2.5 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
             >
               Done & View Appointments
             </button>

@@ -15,7 +15,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
   onReject,
   onClose,
 }) => {
-  const [secondsRemaining, setSecondsRemaining] = useState(300); // 300 seconds (5 min SLA)
+  const [secondsRemaining, setSecondsRemaining] = useState(300);
   const [rejecting, setRejecting] = useState(false);
   const [selectedReason, setSelectedReason] = useState('Fully booked at this hour');
   const [actionLoading, setActionLoading] = useState(false);
@@ -82,8 +82,8 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
   const progressPct = (secondsRemaining / 300) * 100;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 text-slate-900 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
         {/* Urgent Header with 300s Countdown */}
         <div className="text-center space-y-2">
           <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
@@ -95,7 +95,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
                 r="34"
                 stroke="currentColor"
                 strokeWidth="6"
-                className="text-slate-100"
+                className="text-[#E8E4D9]"
                 fill="transparent"
               />
               <circle
@@ -106,53 +106,53 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
                 strokeWidth="6"
                 strokeDasharray={213}
                 strokeDashoffset={213 - (213 * progressPct) / 100}
-                className={secondsRemaining < 60 ? 'text-rose-500' : 'text-brand-500'}
+                className={secondsRemaining < 60 ? 'text-[#DC2626]' : 'text-[#65B32E]'}
                 strokeLinecap="round"
                 fill="transparent"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-mono font-bold text-base text-slate-900">
+              <span className="font-mono font-bold text-base text-[#111111]">
                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
               </span>
-              <span className="text-[9px] uppercase font-bold text-slate-400">SLA Timer</span>
+              <span className="text-[9px] uppercase font-bold text-[#65B32E]">SLA Timer</span>
             </div>
           </div>
 
-          <h3 className="font-bold font-display text-base text-slate-900">
+          <h3 className="font-black font-display text-base text-[#111111]">
             Incoming Appointment Request!
           </h3>
-          <p className="text-xs text-slate-500">Respond within 5 minutes or slot will be released.</p>
+          <p className="text-xs text-[#4B5563] font-medium">Respond within 5 minutes or slot will be re-routed.</p>
         </div>
 
         {/* Appointment Details Box */}
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
-          <div className="flex items-center justify-between font-bold text-slate-900 pb-2 border-b border-slate-200">
+        <div className="p-4 rounded-2xl bg-white border border-[#E8E4D9] space-y-2.5 text-xs shadow-sm">
+          <div className="flex items-center justify-between font-bold text-[#111111] pb-2 border-b border-[#F2EFE8]">
             <span>{booking.service?.name}</span>
-            <span className="text-brand-700 text-sm font-display">₹{booking.providerEarnings || booking.totalAmount} net</span>
+            <span className="text-[#65B32E] text-sm font-black font-display">₹{booking.providerEarnings || booking.totalAmount} net</span>
           </div>
 
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-[#4B5563]">
             <span>Client</span>
-            <span className="font-semibold text-slate-900">
+            <span className="font-bold text-[#111111]">
               {booking.customer?.user?.fullName || 'Verified Client'}
             </span>
           </div>
 
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-[#4B5563]">
             <span>Scheduled Date</span>
-            <span className="font-semibold text-slate-900">{booking.date}</span>
+            <span className="font-bold text-[#111111]">{booking.date}</span>
           </div>
 
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-[#4B5563]">
             <span>Time Window</span>
-            <span className="font-mono font-bold text-slate-900">
+            <span className="font-mono font-bold text-[#111111]">
               {booking.startTime} - {booking.endTime}
             </span>
           </div>
 
           {booking.notes && (
-            <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 italic">
+            <div className="pt-2 border-t border-[#F2EFE8] text-[11px] text-[#4B5563] italic">
               "{booking.notes}"
             </div>
           )}
@@ -161,11 +161,11 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
         {/* Reject reason picker if rejecting */}
         {rejecting ? (
           <div className="space-y-3 animate-fadeIn">
-            <label className="block text-xs font-semibold text-slate-700">Reason for decline:</label>
+            <label className="block text-xs font-bold text-[#111111]">Reason for decline:</label>
             <select
               value={selectedReason}
               onChange={(e) => setSelectedReason(e.target.value)}
-              className="w-full p-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium focus:outline-none"
+              className="w-full p-2.5 text-xs rounded-xl border border-[#DCD8C8] bg-white text-[#111111] font-bold focus:outline-none"
             >
               <option value="Fully booked at this hour">Fully booked at this hour</option>
               <option value="Location outside operating radius">Location outside operating radius</option>
@@ -174,14 +174,14 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={() => setRejecting(false)}
-                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-200 text-slate-600"
+                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-[#E8E4D9] text-[#4B5563] bg-white cursor-pointer"
               >
                 Back
               </button>
               <button
                 onClick={handleRejectManual}
                 disabled={actionLoading}
-                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white shadow-sm"
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-red-50 text-[#DC2626] border border-red-200 shadow-sm cursor-pointer"
               >
                 Confirm Decline
               </button>
@@ -192,7 +192,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
             <button
               onClick={handleAccept}
               disabled={actionLoading}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{actionLoading ? 'Accepting...' : 'Accept Appointment Request'}</span>
@@ -200,7 +200,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
 
             <button
               onClick={() => setRejecting(true)}
-              className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 text-xs font-semibold hover:bg-slate-50 transition-all"
+              className="w-full py-2.5 rounded-xl border border-[#E8E4D9] text-[#4B5563] hover:text-[#111111] text-xs font-semibold bg-white hover:bg-[#FAF8F0] transition-all cursor-pointer"
             >
               Decline Request
             </button>
@@ -210,4 +210,3 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
     </div>
   );
 };
-

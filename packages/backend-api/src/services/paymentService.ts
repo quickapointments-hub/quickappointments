@@ -1,192 +1,165 @@
 import crypto from 'crypto';
-import { prisma } from '../prisma';
-import { PaymentStatus, PaymentMethod } from '@quick-appointments/shared-types';
+import { SupabaseDb } from '../db/supabaseDb';
+
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 
 export class PaymentService {
-  private static RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'qa_razorpay_secret_test_key_12345';
-
-  /**
-   * Create an order on the payment gateway
-   */
-  static async createOrder(bookingId: string, amount: number, currency: string = 'INR') {
-    const orderId = `order_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const transaction = await prisma.paymentTransaction.create({
-      data: {
-        bookingId,
-        amount,
-        currency,
-        status: PaymentStatus.PENDING,
-        gateway: PaymentMethod.RAZORPAY,
-        gatewayTxId: orderId,
-      },
-    });
-
-    return {
-      orderId,
-      amount,
-      currency,
-      transactionId: transaction.id,
-      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_quick_appointments',
-    };
-  }
-
-  /**
-   * Verify HMAC-SHA256 payment signature from client
-   * Ensures client cannot tamper with payment confirmation
-   */
-  static verifySignature(orderId: string, paymentId: string, signature: string): boolean {
-    const body = `${orderId}|${paymentId}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', this.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest('hex');
-
-    return expectedSignature === signature;
-  }
-
-  /**
-   * Process payment gateway webhook with idempotency check
-   * Prevents double processing of webhooks from payment gateways
-   */
-  static async processWebhook(payload: any, signature: string) {
-    // 1. Verify webhook signature
-    const payloadString = JSON.stringify(payload);
-    const expectedSignature = crypto
-      .createHmac('sha256', this.RAZORPAY_KEY_SECRET)
-      .update(payloadString)
-      .digest('hex');
-
-    // In dev / test mode, allow simulation if signature matches or test flag is passed
-    const isValid = signature === expectedSignature || signature === 'test_valid_signature';
-    if (!isValid) {
-      throw new Error('Invalid webhook cryptographic signature');
+  static async createOrder(amountInInr: number, receiptId?: string, _customerId?: string) {
+    if (!Number.isFinite(amountInInr) || amountInInr <= 0) {
+      throw new Error('Invalid payment amount');
     }
 
-    const event = payload.event;
-    const paymentEntity = payload.payload?.payment?.entity;
-    if (!paymentEntity) return { processed: false, reason: 'No payment entity' };
+    const amountInPaise = Math.round(amountInInr * 100);
+    const receipt = receiptId || `rcpt_${Date.now()}`;
 
-    const orderId = paymentEntity.order_id;
-
-    // 2. Idempotency Check: Fetch transaction
-    const existingTx = await prisma.paymentTransaction.findFirst({
-      where: { gatewayTxId: orderId },
-      include: { booking: true },
-    });
-
-    if (!existingTx) {
-      return { processed: false, reason: 'Transaction not found' };
-    }
-
-    // If already marked success, safely ignore duplicate webhook
-    if (existingTx.status === PaymentStatus.PAID) {
-      return { processed: true, note: 'Duplicate webhook safely ignored (Idempotent)' };
-    }
-
-    // 3. Handle Payment Captured / Success
-    if (event === 'payment.captured' || event === 'order.paid') {
-      await prisma.$transaction(async (tx) => {
-        await tx.paymentTransaction.update({
-          where: { id: existingTx.id },
-          data: {
-            status: PaymentStatus.PAID,
-            rawPayload: payloadString,
-          },
-        });
-
-        await tx.booking.update({
-          where: { id: existingTx.bookingId },
-          data: {
-            paymentStatus: PaymentStatus.PAID,
-            paymentRef: paymentEntity.id,
-          },
-        });
-      });
-
-      return { processed: true, status: 'PAID' };
-    }
-
-    // 4. Handle Payment Failed
-    if (event === 'payment.failed') {
-      await prisma.$transaction(async (tx) => {
-        await tx.paymentTransaction.update({
-          where: { id: existingTx.id },
-          data: {
-            status: PaymentStatus.FAILED,
-            rawPayload: payloadString,
-          },
-        });
-
-        await tx.booking.update({
-          where: { id: existingTx.bookingId },
-          data: {
-            paymentStatus: PaymentStatus.FAILED,
-          },
-        });
-      });
-
-      return { processed: true, status: 'FAILED' };
-    }
-
-    return { processed: true, event };
-  }
-
-  /**
-   * Process refund with calculation of platform cancellation policies
-   */
-  static async processRefund(bookingId: string, reason: string) {
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { paymentTx: true, provider: true },
-    });
-
-    if (!booking) throw new Error('Booking not found');
-    if (booking.paymentStatus === PaymentStatus.REFUNDED) {
-      throw new Error('Booking has already been refunded');
-    }
-
-    // Compute refund amount: Full refund if cancelled more than 2 hours in advance
-    const refundAmount = booking.totalAmount;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: 'CANCELLED',
-          paymentStatus: PaymentStatus.REFUNDED,
-          history: {
-            create: {
-              status: 'CANCELLED',
-              reason: `Refund issued: ${reason}`,
-            },
-          },
+    // If real Razorpay live/test credentials exist, invoke Razorpay Orders API
+    if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET && !RAZORPAY_KEY_ID.includes('dummy')) {
+      const authHeader = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${authHeader}`,
+          'Content-Type': 'application/json',
         },
-      });
-
-      await tx.paymentTransaction.create({
-        data: {
-          bookingId,
-          amount: refundAmount,
+        body: JSON.stringify({
+          amount: amountInPaise,
           currency: 'INR',
-          status: 'REFUNDED',
-          gateway: booking.paymentMethod,
-          gatewayTxId: `REFUND_${Date.now()}`,
-          rawPayload: JSON.stringify({ reason, refundAmount }),
-        },
+          receipt,
+          payment_capture: 1,
+        }),
       });
+      if (!rzpRes.ok) {
+        const errText = await rzpRes.text();
+        throw new Error(`Razorpay order creation failed: ${errText}`);
+      }
+      const order: any = await rzpRes.json();
+      return {
+        id: order.id,
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        receipt: order.receipt,
+        status: order.status,
+        keyId: RAZORPAY_KEY_ID,
+      };
+    }
 
-      // Reverse provider earning if recorded
-      await tx.providerEarning.deleteMany({
-        where: { bookingId },
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Payment gateway credentials (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) are not configured.');
+    }
+
+    const orderId = `order_qa_${crypto.randomBytes(6).toString('hex')}`;
+    return {
+      id: orderId,
+      orderId,
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt,
+      status: 'created',
+      keyId: RAZORPAY_KEY_ID || 'rzp_test_sandbox',
+      mode: 'SANDBOX_CHECKOUT',
+    };
+  }
+
+  static verifyRazorpaySignature(orderId: string, paymentId: string, signature: string): boolean {
+    if (!orderId || !paymentId || !signature) return false;
+    if (RAZORPAY_KEY_SECRET && !RAZORPAY_KEY_SECRET.includes('dummy')) {
+      const generatedSignature = crypto
+        .createHmac('sha256', RAZORPAY_KEY_SECRET)
+        .update(`${orderId}|${paymentId}`)
+        .digest('hex');
+      const sigBuf = Buffer.from(signature);
+      const genBuf = Buffer.from(generatedSignature);
+      return sigBuf.length === genBuf.length && crypto.timingSafeEqual(sigBuf, genBuf);
+    }
+
+    // Strict HMAC with dev secret in non-production
+    const devSecret = process.env.JWT_SECRET || 'quick-appointments-dev-secret-key-32chars!';
+    const expectedDevSig = crypto
+      .createHmac('sha256', devSecret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+    if (signature === expectedDevSig) return true;
+    return process.env.NODE_ENV === 'test' && signature === 'test_valid_signature';
+  }
+
+  static async verifyAndMarkBookingPaid(orderId: string, paymentId: string, signature: string, bookingId?: string) {
+    const valid = this.verifyRazorpaySignature(orderId, paymentId, signature);
+    if (!valid) {
+      throw new Error('Payment signature verification failed');
+    }
+
+    if (bookingId) {
+      await SupabaseDb.updateOne('bookings', bookingId, {
+        payment_status: 'PAID',
+        payment_ref: paymentId,
+        updated_at: new Date().toISOString(),
       });
+      SupabaseDb.broadcastSync('bookings_updated', { bookingId });
+    }
+
+    return { verified: true, orderId, paymentId };
+  }
+
+  static async handleWebhook(eventBody: any, webhookSignature: string) {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_KEY_SECRET;
+    if (secret && webhookSignature) {
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(typeof eventBody === 'string' ? eventBody : JSON.stringify(eventBody))
+        .digest('hex');
+      if (webhookSignature !== expected && process.env.NODE_ENV === 'production') {
+        throw new Error('Invalid webhook signature');
+      }
+    }
+
+    const eventType = eventBody?.event;
+    if (eventType === 'payment.captured') {
+      const paymentEntity = eventBody?.payload?.payment?.entity;
+      const orderId = paymentEntity?.order_id;
+      const paymentId = paymentEntity?.id;
+      if (orderId) {
+        const booking = await SupabaseDb.selectOne<any>(
+          'bookings',
+          `select=id&payment_ref=eq.${encodeURIComponent(orderId)}`
+        );
+        if (booking) {
+          await SupabaseDb.updateOne('bookings', booking.id, {
+            payment_status: 'PAID',
+            payment_ref: paymentId || orderId,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+    }
+    return { received: true, event: eventType || 'unknown' };
+  }
+
+  static async initiateRefund(bookingId: string, reason?: string, amountInInr?: number) {
+    const booking = await SupabaseDb.selectOne<any>(
+      'bookings',
+      `select=*&id=eq.${encodeURIComponent(bookingId)}`
+    );
+    if (!booking) throw new Error('Booking not found');
+
+    const refundAmount = Number(amountInInr || booking.total_amount || 0);
+    const refund = await SupabaseDb.insertOne<any>('refunds', {
+      booking_id: bookingId,
+      amount: refundAmount,
+      reason: reason || 'Admin refund processed',
+      status: 'PROCESSED',
+      gateway_refund_id: `rfnd_${crypto.randomBytes(5).toString('hex')}`,
+      processed_at: new Date().toISOString(),
+      sla_deadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     });
 
-    return {
-      success: true,
-      bookingId,
-      refundAmount,
-      reason,
-    };
+    await SupabaseDb.updateOne('bookings', bookingId, {
+      payment_status: 'REFUNDED',
+      updated_at: new Date().toISOString(),
+    });
+
+    SupabaseDb.broadcastSync('bookings_updated', { bookingId });
+    return refund;
   }
 }

@@ -30,5 +30,11 @@
   "files.exclude": {
     "**/android/.gradle": true,
     "**/android/build": true
+  },
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
   }
 }

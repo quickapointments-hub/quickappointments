@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n \"BACKEND,ADMIN,MOBILE\" -c \"blue,green,magenta\" \"npm run start:backend\" \"npm run start:admin\" \"npm run start:mobile\"",
+    "dev:admin": "concurrently -n \"BACKEND,ADMIN\" -c \"blue,green\" \"npm run start:backend\" \"npm run start:admin\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "start:backend": "npm --workspace=packages/backend-api run dev",

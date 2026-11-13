@@ -15,9 +15,8 @@ export const AwaitingProviderModal: React.FC<AwaitingProviderModalProps> = ({
   onDeclinedOrExpired,
   onCancelAndRefund,
 }) => {
-  const [secondsRemaining, setSecondsRemaining] = useState(300); // 300 seconds (5 min SLA)
+  const [secondsRemaining, setSecondsRemaining] = useState(300);
 
-  // 5-second polling check for provider acceptance
   useEffect(() => {
     const pollInterval = setInterval(async () => {
       try {
@@ -67,47 +66,47 @@ export const AwaitingProviderModal: React.FC<AwaitingProviderModalProps> = ({
   const seconds = secondsRemaining % 60;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 text-slate-900 text-center space-y-5">
-        <div className="w-16 h-16 rounded-3xl bg-brand-50 border border-brand-200 text-brand-600 flex items-center justify-center mx-auto shadow-inner">
-          <Clock className="w-8 h-8 animate-pulse text-brand-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] text-center space-y-5">
+        <div className="w-16 h-16 rounded-3xl bg-[#EFF8E7] border border-[#65B32E] text-[#65B32E] flex items-center justify-center mx-auto shadow-inner">
+          <Clock className="w-8 h-8 animate-pulse text-[#65B32E]" />
         </div>
 
         <div>
-          <span className="text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
-            5-Minute Provider SLA Active
+          <span className="text-[10px] uppercase font-bold text-[#111111] bg-[#EFF8E7] px-2.5 py-0.5 rounded-full border border-[#65B32E]">
+            5-Minute Specialist SLA Active
           </span>
-          <h3 className="font-bold font-display text-lg text-slate-900 mt-2">
-            Awaiting Provider Confirmation
+          <h3 className="font-bold font-display text-lg text-[#111111] mt-2">
+            Awaiting Specialist Confirmation
           </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-            Your specialist has 5 minutes to confirm availability. Your payment authorization is held securely.
+          <p className="text-xs text-[#4B5563] mt-1 max-w-xs mx-auto font-medium">
+            Your specialist has 5 minutes to confirm availability. Your slot is exclusively held.
           </p>
         </div>
 
         {/* Big Countdown Clock */}
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-          <div className="font-mono text-3xl font-black text-slate-900">
+        <div className="p-4 rounded-2xl bg-white border border-[#E8E4D9] shadow-sm">
+          <div className="font-mono text-3xl font-black text-[#111111]">
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </div>
-          <span className="text-[10px] text-slate-400 font-medium">Auto-reroutes if unaccepted</span>
+          <span className="text-[10px] text-[#4B5563] font-semibold">Auto-reroutes if unaccepted</span>
         </div>
 
         {/* Provider Brief */}
-        <div className="p-3.5 rounded-2xl bg-slate-50 text-xs text-left space-y-1">
-          <p className="text-slate-600">
-            <span className="font-semibold text-slate-900">Specialist:</span>{' '}
+        <div className="p-3.5 rounded-2xl bg-white border border-[#E8E4D9] text-xs text-left space-y-1">
+          <p className="text-[#4B5563]">
+            <span className="font-bold text-[#111111]">Specialist:</span>{' '}
             {booking.provider?.businessName || booking.provider?.user?.fullName}
           </p>
-          <p className="text-slate-600">
-            <span className="font-semibold text-slate-900">Slot:</span> {booking.date} @ {booking.startTime}
+          <p className="text-[#4B5563]">
+            <span className="font-bold text-[#111111]">Slot:</span> {booking.date} @ {booking.startTime}
           </p>
         </div>
 
         {/* Cancel link */}
         <button
           onClick={onCancelAndRefund}
-          className="text-xs font-semibold text-slate-500 hover:text-rose-600 transition-colors flex items-center justify-center gap-1 mx-auto"
+          className="text-xs font-bold text-[#DC2626] hover:underline transition-colors flex items-center justify-center gap-1 mx-auto cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Cancel and release authorization</span>
@@ -116,4 +115,3 @@ export const AwaitingProviderModal: React.FC<AwaitingProviderModalProps> = ({
     </div>
   );
 };
-

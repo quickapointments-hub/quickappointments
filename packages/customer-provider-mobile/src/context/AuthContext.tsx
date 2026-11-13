@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { mobileApi } from '../api';
 
 export interface UserState {
@@ -16,7 +16,7 @@ interface AuthContextType {
   activeRole: 'CUSTOMER' | 'PROVIDER';
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (phone: string, otp: string, fullName?: string, role?: string) => Promise<void>;
+  login: (phone: string, otp: string, fullName?: string, role?: string, preloadedUser?: any) => Promise<any>;
   logout: () => void;
   switchRole: (role: 'CUSTOMER' | 'PROVIDER') => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -24,21 +24,48 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const normalizeProviderProfile = (prof: any) => {
+  if (!prof) return undefined;
+  const verificationStatus = prof.verificationStatus || prof.verification_status || 'PENDING';
+  const isAcceptingBookings =
+    verificationStatus === 'APPROVED' &&
+    Boolean(prof.isAcceptingBookings ?? prof.is_accepting_bookings);
+  return {
+    ...prof,
+    businessName: prof.businessName || prof.business_name,
+    verificationStatus,
+    verification_status: verificationStatus,
+    isVerified: verificationStatus === 'APPROVED',
+    isAcceptingBookings,
+    is_accepting_bookings: isAcceptingBookings,
+    rejectionReason: prof.rejectionReason ?? prof.rejection_reason ?? null,
+    rejection_reason: prof.rejectionReason ?? prof.rejection_reason ?? null,
+  };
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserState | null>(() => {
-    const cached = localStorage.getItem('qa_mobile_user');
-    return cached ? JSON.parse(cached) : null;
+    try {
+      const cached = localStorage.getItem('qa_mobile_user');
+      if (!cached || cached === 'undefined' || cached === 'null') return null;
+      const parsed = JSON.parse(cached);
+      if (parsed?.providerProfile) {
+        parsed.providerProfile = normalizeProviderProfile(parsed.providerProfile);
+      }
+      return parsed;
+    } catch (e) {
+      try {
+        localStorage.removeItem('qa_mobile_user');
+      } catch { }
+      return null;
+    }
   });
   const [activeRole, setActiveRole] = useState<'CUSTOMER' | 'PROVIDER'>(
     user?.activeRole || 'CUSTOMER'
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    refreshProfile();
-  }, []);
-
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('qa_mobile_token');
     if (!token) {
       setIsLoading(false);
@@ -48,45 +75,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await mobileApi.getMe();
       if (res.user) {
-        setUser(res.user);
-        setActiveRole(res.user.activeRole);
-        localStorage.setItem('qa_mobile_user', JSON.stringify(res.user));
-      }
-    } catch (err) {
-      console.warn('Profile refresh fallback to cached session');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async (phone: string, otp: string, fullName?: string, role: string = 'CUSTOMER') => {
-    try {
-      const res = await mobileApi.verifyOtp(phone, otp, fullName, role);
-      if (res.user) {
-        setUser(res.user);
-        setActiveRole(res.user.activeRole);
-        localStorage.setItem('qa_mobile_user', JSON.stringify(res.user));
-        return res;
-      }
-    } catch (err) {
-      if (otp === '123456') {
-        const mockUser: UserState = {
-          id: 'user_' + phone.replace(/\D/g, '').slice(-6),
-          phone,
-          fullName: fullName || 'Pooja Verma',
-          roles: [role],
-          activeRole: role as 'CUSTOMER' | 'PROVIDER',
-          customerProfile: { city: 'Mumbai', address: 'Bandra West' },
-          providerProfile: { city: 'Mumbai', businessName: `${fullName || 'Provider'}'s Studio` },
+        const normalized: UserState = {
+          ...res.user,
+          providerProfile: normalizeProviderProfile(res.user.providerProfile),
         };
-        setUser(mockUser);
-        setActiveRole(mockUser.activeRole);
-        localStorage.setItem('qa_mobile_token', 'mock_token_' + Date.now());
-        localStorage.setItem('qa_mobile_user', JSON.stringify(mockUser));
-        return { user: mockUser, isNewUser: false };
+        setUser(normalized);
+        setActiveRole(normalized.activeRole);
+        localStorage.setItem('qa_mobile_user', JSON.stringify(normalized));
+        setIsLoading(false);
+        return;
       }
-      throw err;
+    } catch (err) {
+      console.warn('Backend /auth/me unavailable, trying provider KYC sync');
     }
+
+    try {
+      if (user?.id || user?.phone) {
+        const kyc = await mobileApi.getProviderKycStatus(user?.id, user?.phone);
+        if (kyc?.profile) {
+          const updated: UserState = {
+            ...user,
+            providerProfile: normalizeProviderProfile(kyc.profile),
+          };
+          setUser(updated);
+          localStorage.setItem('qa_mobile_user', JSON.stringify(updated));
+        }
+      }
+    } catch { }
+
+    setIsLoading(false);
+  }, [user?.id, user?.phone]);
+
+  useEffect(() => {
+    refreshProfile();
+    const unsubscribeSync = mobileApi.subscribeToSync((type) => {
+      if (type === 'PROVIDER_APPROVED' || type === 'USER_UPDATED') {
+        refreshProfile();
+      }
+    });
+    return () => {
+      unsubscribeSync();
+    };
+  }, []);
+
+  const login = async (
+    phone: string,
+    otp: string,
+    fullName?: string,
+    role: string = 'CUSTOMER',
+    preloadedUser?: any
+  ) => {
+    if (preloadedUser) {
+      const normalized: UserState = {
+        id: preloadedUser.id,
+        phone: preloadedUser.phone || phone,
+        fullName: preloadedUser.fullName || preloadedUser.full_name || fullName || 'Quick User',
+        roles: preloadedUser.roles || [role],
+        activeRole: (preloadedUser.activeRole || role) as 'CUSTOMER' | 'PROVIDER',
+        customerProfile: preloadedUser.customerProfile || preloadedUser.customer_profiles,
+        providerProfile: normalizeProviderProfile(
+          preloadedUser.providerProfile || preloadedUser.provider_profiles
+        ),
+      };
+      setUser(normalized);
+      setActiveRole(normalized.activeRole);
+      localStorage.setItem('qa_mobile_user', JSON.stringify(normalized));
+      return { user: normalized, isNewUser: false };
+    }
+
+    const res = await mobileApi.verifyOtp(phone, otp, fullName, role);
+    if (res.user) {
+      const normalized: UserState = {
+        ...res.user,
+        providerProfile: normalizeProviderProfile(res.user.providerProfile),
+      };
+      setUser(normalized);
+      setActiveRole(normalized.activeRole);
+      localStorage.setItem('qa_mobile_user', JSON.stringify(normalized));
+      return res;
+    }
+    throw new Error('Authentication failed. Please try again.');
   };
 
   const logout = () => {
@@ -97,12 +165,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const switchRole = async (targetRole: 'CUSTOMER' | 'PROVIDER') => {
     try {
-      await mobileApi.switchRole(targetRole);
+      await mobileApi.switchRole(targetRole).catch(() => null);
       setActiveRole(targetRole);
       if (user) {
-        const updated = { ...user, activeRole: targetRole };
+        const updated: UserState = { ...user, activeRole: targetRole };
         if (!updated.roles.includes(targetRole)) {
           updated.roles.push(targetRole);
+        }
+        if (targetRole === 'PROVIDER') {
+          const kyc = await mobileApi.getProviderKycStatus(user.id, user.phone).catch(() => null);
+          if (kyc?.profile) {
+            updated.providerProfile = normalizeProviderProfile(kyc.profile);
+          }
         }
         setUser(updated);
         localStorage.setItem('qa_mobile_user', JSON.stringify(updated));

@@ -2,11 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
 @layer base {
-  body {
+  html, body {
     @apply font-sans select-none antialiased;
+    background-color: #FDFCF4;
+    color: #111111;
     -webkit-tap-highlight-color: transparent;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+}
+
+/* Safe Area Insets Utilities */
+.pt-safe {
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+}
+
+.pb-safe {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+
+.bottom-nav-safe {
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  height: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* Custom scrollbars for clean mobile appearance */
@@ -14,6 +39,7 @@
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 9999px;
@@ -26,4 +52,3 @@
 .charcoal-gradient {
   background: linear-gradient(145deg, #18191E 0%, #0E0F12 100%);
 }
-

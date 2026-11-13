@@ -46,7 +46,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
       if (newAttempts >= 5) {
-        const lockoutTime = Date.now() + 15 * 60 * 1000; // 15-minute lockout
+        const lockoutTime = Date.now() + 15 * 60 * 1000;
         setLockedUntil(lockoutTime);
         setError('Too many incorrect attempts. Screen locked for 15 minutes for customer security.');
       } else {
@@ -59,40 +59,40 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 text-slate-900 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex items-center justify-between pb-3 border-b border-[#E8E4D9]">
           <div>
-            <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-brand-600" />
+            <h3 className="font-bold text-sm text-[#111111] flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#65B32E]" />
               <span>Verify & Complete Service</span>
             </h3>
-            <p className="text-[11px] text-slate-400 font-mono">Ref: {booking.bookingRef}</p>
+            <p className="text-[11px] text-[#4B5563] font-mono">Ref: {booking.bookingRef}</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#4B5563]">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Customer & Earnings Info */}
-        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
+        <div className="p-3.5 rounded-2xl bg-white border border-[#E8E4D9] space-y-2 text-xs shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Client Name:</span>
-            <span className="font-bold text-slate-900">
+            <span className="text-[#4B5563]">Client Name:</span>
+            <span className="font-bold text-[#111111]">
               {booking.customer?.user?.fullName || 'Client'}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Net Credit on Completion:</span>
-            <span className="font-bold text-brand-700 font-display text-sm">
+            <span className="text-[#4B5563]">Net Credit on Completion:</span>
+            <span className="font-black text-[#65B32E] font-display text-sm">
               +₹{booking.providerEarnings || booking.totalAmount}
             </span>
           </div>
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[#DC2626] text-xs flex items-center gap-2 font-semibold">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -100,15 +100,15 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
 
         {/* 6-Digit Display */}
         <div className="text-center space-y-2">
-          <p className="text-xs text-slate-500 font-medium">Ask client for their 6-digit Service OTP</p>
+          <p className="text-xs text-[#4B5563] font-medium">Ask client for their 6-digit Service OTP</p>
           <div className="flex justify-center gap-2">
             {[0, 1, 2, 3, 4, 5].map((idx) => (
               <div
                 key={idx}
                 className={`w-10 h-12 rounded-xl border flex items-center justify-center font-mono text-lg font-bold ${
                   otp[idx]
-                    ? 'border-brand-500 bg-brand-50/50 text-slate-900'
-                    : 'border-slate-200 bg-slate-50 text-slate-300'
+                    ? 'border-[#65B32E] bg-[#EFF8E7] text-[#111111]'
+                    : 'border-[#DCD8C8] bg-white text-[#6B7280]'
                 }`}
               >
                 {otp[idx] || '•'}
@@ -127,7 +127,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
                   key={i}
                   type="button"
                   onClick={handleDelete}
-                  className="py-3 text-xs font-bold rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all"
+                  className="py-3 text-xs font-bold rounded-2xl bg-white border border-[#E8E4D9] hover:bg-[#FAF8F0] text-[#4B5563] transition-all cursor-pointer"
                 >
                   DEL
                 </button>
@@ -138,7 +138,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
                 key={i}
                 type="button"
                 onClick={() => handleKeyPress(key)}
-                className="py-3 text-base font-bold font-mono rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 transition-all"
+                className="py-3 text-base font-bold font-mono rounded-2xl bg-white hover:bg-[#FAF8F0] border border-[#E8E4D9] text-[#111111] transition-all cursor-pointer shadow-sm"
               >
                 {key}
               </button>
@@ -150,7 +150,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
         <button
           onClick={handleVerify}
           disabled={otp.length !== 6 || verifying || isLocked}
-          className="w-full py-3 rounded-xl bg-charcoal-900 hover:bg-black text-white font-bold text-xs shadow-lg shadow-charcoal-900/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full py-3 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
         >
           <CheckCircle2 className="w-4 h-4" />
           <span>{verifying ? 'Verifying...' : 'Verify OTP & Complete Appointment'}</span>
@@ -159,4 +159,3 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
     </div>
   );
 };
-

@@ -1,138 +1,213 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { VerificationPage } from './pages/VerificationPage';
-import { BookingsPage } from './pages/BookingsPage';
-import { ProvidersPage } from './pages/ProvidersPage';
-import { CustomersPage } from './pages/CustomersPage';
-import { CatalogPage } from './pages/CatalogPage';
-import { RateCardPage } from './pages/RateCardPage';
-import { FinancePage } from './pages/FinancePage';
-import { RefundsPage } from './pages/RefundsPage';
-import { PayoutsPage } from './pages/PayoutsPage';
-import { SupportPage } from './pages/SupportPage';
-import { AuditPage } from './pages/AuditPage';
-import { AdminUsersPage } from './pages/AdminUsersPage';
-import { SettingsPage } from './pages/SettingsPage';
+import {
+  LoginPage,
+  DashboardPage,
+  VerificationPage,
+  BookingsPage,
+  ProvidersPage,
+  CustomersPage,
+  CatalogPage,
+  RateCardPage,
+  ServiceLocationsPage,
+  FinancePage,
+  RefundsPage,
+  PayoutsPage,
+  SupportPage,
+  AuditPage,
+  AdminUsersPage,
+  SettingsPage,
+  AdminProfilePage,
+  BannersPage,
+  OffersCouponsPage,
+  NotificationsPage,
+  ReviewsRatingsPage,
+  ReportsPage,
+  ServicesPage,
+  ProviderDetailsPage,
+} from './pages';
 import { api } from './api';
+import { supabase } from './supabase';
+import { AdminPreloader } from './components/AdminPreloader';
 
 export const App: React.FC = () => {
+  const [initializing, setInitializing] = useState<boolean>(true);
   const [adminUser, setAdminUser] = useState<any>(() => {
-    const cached = localStorage.getItem('qa_admin_user');
-    return cached ? JSON.parse(cached) : { fullName: 'Super Admin', email: 'admin@quickappointments.in', activeRole: 'SUPERADMIN' };
+    if (!api.hasValidSession()) return null;
+    try {
+      const cached = localStorage.getItem('qa_admin_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
   });
 
+  useEffect(() => {
+    api.onUnauthorized(() => {
+      setAdminUser(null);
+    });
+
+    let active = true;
+    const minSplashDelay = new Promise((resolve) => setTimeout(resolve, 420));
+
+    const restoreSession = async () => {
+      try {
+        if (api.hasValidSession()) {
+          const res = await api.getAdminMe();
+          if (active && res?.user) {
+            setAdminUser(res.user);
+          }
+        }
+      } catch (err: any) {
+        // Keep cached user only when backend is temporarily unreachable; clear on auth failures
+        const msg = (err?.message || '').toLowerCase();
+        if (
+          active &&
+          !msg.includes('unable to connect') &&
+          !msg.includes('unable to reach')
+        ) {
+          api.logout();
+          setAdminUser(null);
+        }
+      } finally {
+        await minSplashDelay;
+        if (active) {
+          setInitializing(false);
+        }
+      }
+    };
+
+    restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [pendingKycCount, setPendingKycCount] = useState<number>(0);
 
-  const titles: Record<string, { title: string; subtitle: string }> = {
-    dashboard: {
-      title: 'Executive Operations Dashboard',
-      subtitle: 'Real-time performance metrics, revenues, and booking activity',
-    },
-    verification: {
-      title: 'Provider KYC & Compliance Desk',
-      subtitle: 'Review government identification documents and approve service providers',
-    },
-    catalog: {
-      title: 'Category & Service Catalog',
-      subtitle: 'Configure dynamic categories, service definitions and base prices',
-    },
-    rate_cards: {
-      title: 'Provider Rate Card Approvals',
-      subtitle: 'Review provider-requested custom rates before they become live',
-    },
-    bookings: {
-      title: 'Appointments & Booking Ledger',
-      subtitle: 'Central directory of customer appointments across all service categories',
-    },
-    providers: {
-      title: 'Registered Service Providers',
-      subtitle: 'Manage individual and business service professionals',
-    },
-    customers: {
-      title: 'Registered Customer Accounts',
-      subtitle: 'Manage consumer profiles, booking volumes and access control',
-    },
-    finance: {
-      title: '5% Platform Commission Engine',
-      subtitle: 'Configure take-rate rules, track margins and gross transaction volume',
-    },
-    refunds: {
-      title: '48-Hour 100% Refund Queue',
-      subtitle: 'Process guaranteed 100% cancellations back to original payment methods',
-    },
-    payouts: {
-      title: 'Next-Day (T+1) Provider Settlements',
-      subtitle: 'Batch settlements for verified completed appointments and bank export',
-    },
-    support: {
-      title: 'Support & Dispute Resolution Desk',
-      subtitle: 'Manage customer complaints, service dispute tickets and resolutions',
-    },
-    audit: {
-      title: 'Compliance & Security Audit Logs',
-      subtitle: 'Immutable record of security and administrative operations',
-    },
-    roles: {
-      title: 'Administrative Users & Roles (RBAC)',
-      subtitle: 'Manage admin personnel, assign roles and enforce access policies',
-    },
-    settings: {
-      title: 'Platform System Settings',
-      subtitle: 'Configure core platform parameters, SMS OTP and payment gateways',
-    },
-  };
+  useEffect(() => {
+    if (!adminUser) return;
+    let active = true;
 
-  const currentMeta = titles[currentTab] || { title: 'Admin Console', subtitle: '' };
+    const refreshPendingCount = async () => {
+      try {
+        const res = await api.getMetrics();
+        if (active && typeof res?.data?.pendingVerifications === 'number') {
+          setPendingKycCount(res.data.pendingVerifications);
+        }
+      } catch (e) {}
+    };
+
+    refreshPendingCount();
+    const timer = setInterval(refreshPendingCount, 15000);
+    const unsubscribeSync = api.subscribeToSync((ev) => {
+      if (ev === 'providers_updated' || ev === 'provider_kyc_updated' || ev === 'bookings_updated') {
+        refreshPendingCount();
+      }
+    });
+    const channel = supabase
+      .channel('admin-sidebar-pending-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'provider_profiles' }, () => {
+        refreshPendingCount();
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+      unsubscribeSync();
+      supabase.removeChannel(channel);
+    };
+  }, [adminUser, currentTab]);
 
   const handleLogout = () => {
     api.logout();
     setAdminUser(null);
   };
 
+  if (initializing) {
+    return (
+      <AdminPreloader
+        message={
+          api.hasValidSession()
+            ? 'Restoring administrator session...'
+            : 'Loading Admin Panel...'
+        }
+      />
+    );
+  }
+
   if (!adminUser) {
     return <LoginPage onLoginSuccess={(u) => setAdminUser(u)} />;
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans selection:bg-brand-500 selection:text-white">
-      {/* Sidebar with blueprint navigation grouping */}
-      <Sidebar
-        currentTab={currentTab}
-        onTabChange={(tab) => setCurrentTab(tab)}
-        onLogout={handleLogout}
-        pendingKycCount={1}
-        adminUser={adminUser}
-      />
+    <div className="flex min-h-screen bg-[#FAF9F5] font-sans selection:bg-[#16A34A] selection:text-white">
+      {/* Sidebar with blueprint navigation matching screenshots */}
+      {!sidebarCollapsed && (
+        <Sidebar
+          currentTab={currentTab}
+          onTabChange={(tab) => setCurrentTab(tab)}
+          onLogout={handleLogout}
+          pendingKycCount={pendingKycCount}
+          adminUser={adminUser}
+        />
+      )}
 
       {/* Main Workspace */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          title={currentMeta.title}
-          subtitle={currentMeta.subtitle}
+          adminUser={adminUser}
+          onNavigateToProfile={() => setCurrentTab('admin_profile')}
+          onLogout={handleLogout}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
         <main className="flex-1 pb-16">
           {currentTab === 'dashboard' && (
             <DashboardPage onNavigateToKyc={() => setCurrentTab('verification')} />
           )}
+          {currentTab === 'admin_profile' && (
+            <AdminProfilePage adminUser={adminUser} onUpdateAdminUser={(u) => setAdminUser(u)} />
+          )}
+          {currentTab === 'providers' && (
+            <ProvidersPage
+              onNavigateToKyc={() => setCurrentTab('verification')}
+              onViewDetails={(id) => {
+                setSelectedProviderId(id);
+                setCurrentTab('provider_details');
+              }}
+            />
+          )}
+          {currentTab === 'provider_details' && selectedProviderId && (
+            <ProviderDetailsPage
+              providerId={selectedProviderId}
+              onBack={() => setCurrentTab('providers')}
+            />
+          )}
           {currentTab === 'verification' && <VerificationPage />}
           {currentTab === 'catalog' && <CatalogPage />}
-          {currentTab === 'rate_cards' && <RateCardPage />}
+          {currentTab === 'services' && <ServicesPage />}
           {currentTab === 'bookings' && <BookingsPage />}
-          {currentTab === 'providers' && (
-            <ProvidersPage onNavigateToKyc={() => setCurrentTab('verification')} />
-          )}
           {currentTab === 'customers' && <CustomersPage />}
+          {currentTab === 'locations' && <ServiceLocationsPage />}
           {currentTab === 'finance' && <FinancePage />}
+          {currentTab === 'offers' && <OffersCouponsPage />}
+          {currentTab === 'banners' && <BannersPage />}
           {currentTab === 'refunds' && <RefundsPage />}
           {currentTab === 'payouts' && <PayoutsPage />}
+          {currentTab === 'rate_cards' && <RateCardPage />}
           {currentTab === 'support' && <SupportPage />}
           {currentTab === 'audit' && <AuditPage />}
           {currentTab === 'roles' && <AdminUsersPage />}
           {currentTab === 'settings' && <SettingsPage />}
+          {currentTab === 'notifications' && <NotificationsPage />}
+          {currentTab === 'reviews' && <ReviewsRatingsPage />}
+          {currentTab === 'reports' && <ReportsPage />}
         </main>
       </div>
     </div>

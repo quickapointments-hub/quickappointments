@@ -6,7 +6,7 @@ const getEnvVar = (name: string): string | undefined => {
     if (proc && proc[name]) {
       return proc[name];
     }
-  } catch (e) {}
+  } catch (e) { }
 
   try {
     // @ts-ignore
@@ -14,19 +14,19 @@ const getEnvVar = (name: string): string | undefined => {
       // @ts-ignore
       return import.meta.env[name];
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return undefined;
 };
 
-const supabaseUrl = 
+const supabaseUrl =
   getEnvVar('EXPO_PUBLIC_SUPABASE_URL') ||
   getEnvVar('VITE_SUPABASE_URL') ||
   'https://ugxgtgvykauyydxoqouz.supabase.co';
 
-const supabaseAnonKey = 
+const supabaseKey =
   getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY') ||
   getEnvVar('VITE_SUPABASE_ANON_KEY') ||
   'sb_publishable_sCfjCcIrT0I5JHxWy5oEAg_yvzs9lD1';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseKey);

@@ -1,34 +1,24 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  ShieldCheck,
-  CalendarCheck2,
-  Users2,
-  FolderTree,
-  Coins,
-  FileClock,
-  Settings,
-  LogOut,
-  Tag,
   Users,
-  RotateCcw,
-  Landmark,
-  HelpCircle,
-  UserCog,
+  Briefcase,
+  FolderTree,
+  Wrench,
+  CalendarCheck,
+  MapPin,
+  CreditCard,
+  Ticket,
+  Image as ImageIcon,
+  Bell,
+  Star,
+  Headphones,
+  BarChart3,
+  Users2,
+  Settings,
+  UserCheck,
+  LogOut,
 } from 'lucide-react';
-
-interface MenuItem {
-  id: string;
-  label: string;
-  icon: any;
-  badge?: number;
-}
-
-interface MenuSection {
-  title: string;
-  roles: string[];
-  items: MenuItem[];
-}
 
 interface SidebarProps {
   currentTab: string;
@@ -43,151 +33,116 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   onLogout,
   pendingKycCount = 0,
-  adminUser,
 }) => {
-  const userRole = adminUser?.activeRole || 'SUPERADMIN';
-
-  const menuSections: MenuSection[] = [
-    {
-      title: 'Overview',
-      roles: ['SUPERADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'],
-      items: [{ id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard }],
-    },
-    {
-      title: 'Verification',
-      roles: ['SUPERADMIN', 'OPERATIONS_ADMIN'],
-      items: [
-        {
-          id: 'verification',
-          label: 'KYC & Verifications',
-          icon: ShieldCheck,
-          badge: pendingKycCount > 0 ? pendingKycCount : undefined,
-        },
-      ],
-    },
-    {
-      title: 'Catalog Curation',
-      roles: ['SUPERADMIN', 'OPERATIONS_ADMIN'],
-      items: [
-        { id: 'catalog', label: 'Master Categories', icon: FolderTree },
-        { id: 'rate_cards', label: 'Rate Approvals', icon: Tag },
-      ],
-    },
-    {
-      title: 'Operations',
-      roles: ['SUPERADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'],
-      items: [
-        { id: 'bookings', label: 'Master Bookings', icon: CalendarCheck2 },
-        { id: 'providers', label: 'Service Providers', icon: Users2 },
-        { id: 'customers', label: 'Customer Accounts', icon: Users },
-      ],
-    },
-    {
-      title: 'Finance & Payouts',
-      roles: ['SUPERADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'],
-      items: [
-        { id: 'finance', label: '5% Take-Rate Engine', icon: Coins },
-        { id: 'refunds', label: '48h Refund Queue', icon: RotateCcw },
-        { id: 'payouts', label: 'T+1 Settlements', icon: Landmark },
-      ],
-    },
-    {
-      title: 'Governance',
-      roles: ['SUPERADMIN', 'SUPPORT_ADMIN'],
-      items: [
-        { id: 'support', label: 'Disputes & Tickets', icon: HelpCircle },
-        { id: 'audit', label: 'Compliance Audit Logs', icon: FileClock },
-        { id: 'roles', label: 'Admin RBAC Roles', icon: UserCog },
-        { id: 'settings', label: 'System Settings', icon: Settings },
-      ],
-    },
+  const primaryNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'providers', label: 'Service Providers', icon: Briefcase, badge: pendingKycCount > 0 ? pendingKycCount : undefined },
+    { id: 'catalog', label: 'Categories', icon: FolderTree },
+    { id: 'services', label: 'Services', icon: Wrench },
+    { id: 'bookings', label: 'Appointments', icon: CalendarCheck },
+    { id: 'locations', label: 'Locations', icon: MapPin },
+    { id: 'finance', label: 'Finance & Payments', icon: CreditCard },
+    { id: 'offers', label: 'Offers & Coupons', icon: Ticket },
+    { id: 'banners', label: 'Banner Management', icon: ImageIcon },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'reviews', label: 'Reviews & Ratings', icon: Star },
+    { id: 'support', label: 'Support & Complaints', icon: Headphones },
+    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+    { id: 'roles', label: 'Admin User Management', icon: Users2 },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 min-h-screen flex flex-col shrink-0 select-none">
-      {/* Brand Logo & Header */}
-      <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-        <img src="/logo.png" alt="Quick Appointments" className="h-10 w-auto object-contain" />
-        <div>
-          <span className="text-[10px] uppercase tracking-wider font-bold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
-            {userRole.replace('_', ' ')}
-          </span>
+    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 min-h-screen font-sans select-none overflow-y-auto">
+      {/* Brand Header */}
+      <div>
+        <div className="h-20 px-6 flex items-center border-b border-slate-100 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="Quick Appointments"
+              className="h-10 w-auto object-contain"
+              onError={(e: any) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <div className="flex flex-col">
+              <span className="font-extrabold text-sm tracking-tight text-slate-900 leading-tight">
+                QUICK
+              </span>
+              <span className="font-semibold text-[10px] tracking-wider text-[#16A34A] -mt-0.5">
+                APPOINTMENTS
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Primary Menu Navigation */}
+        <div className="px-3 py-4 space-y-1">
+          {primaryNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              currentTab === item.id ||
+              (item.id === 'providers' && currentTab === 'provider_details');
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-[#16A34A] text-white shadow-sm shadow-emerald-700/20'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
+                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
+                    }`}
+                  />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] rounded-full font-bold ${
+                      isActive ? 'bg-white text-[#16A34A]' : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Navigation Sections */}
-      <nav className="p-4 space-y-4 flex-1 overflow-y-auto">
-        {menuSections.map((section) => {
-          // Check role permission
-          if (userRole !== 'SUPERADMIN' && !section.roles.includes(userRole)) {
-            return null;
-          }
+      {/* Bottom Profile & Logout Group */}
+      <div className="p-3 border-t border-slate-100 space-y-1 bg-white sticky bottom-0 z-10">
+        <button
+          onClick={() => onTabChange('admin_profile')}
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+            currentTab === 'admin_profile'
+              ? 'bg-[#16A34A] text-white shadow-sm shadow-emerald-700/20'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <UserCheck
+            className={`w-4 h-4 shrink-0 ${
+              currentTab === 'admin_profile' ? 'text-white' : 'text-slate-400'
+            }`}
+          />
+          <span>Admin Profile</span>
+        </button>
 
-          return (
-            <div key={section.title} className="space-y-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
-                {section.title}
-              </div>
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onTabChange(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      isActive
-                        ? 'bg-brand-50 text-brand-800 font-bold shadow-sm ring-1 ring-brand-200'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon
-                        className={`w-4 h-4 transition-colors ${
-                          isActive ? 'text-brand-600' : 'text-slate-400'
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge !== undefined && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Footer Profile & Logout */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-charcoal-900 text-brand-500 font-bold flex items-center justify-center text-xs shrink-0">
-              {adminUser?.fullName?.charAt(0) || 'A'}
-            </div>
-            <div className="min-w-0 truncate">
-              <p className="text-xs font-semibold text-slate-800 truncate">
-                {adminUser?.fullName || 'SuperAdmin'}
-              </p>
-              <p className="text-[10px] text-slate-400 font-mono truncate">
-                {adminUser?.email || 'admin@quickappointments.in'}
-              </p>
-            </div>
-          </div>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              title="Log out"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+        >
+          <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );
