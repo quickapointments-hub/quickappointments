@@ -467,14 +467,32 @@ export class AdminService {
     });
     if (!updated) throw new Error('Rate card not found');
 
+    const [provider, service] = await Promise.all([
+      SupabaseDb.selectOne<any>('provider_profiles', `select=*&id=eq.${encodeURIComponent(updated.provider_id)}`),
+      SupabaseDb.selectOne<any>('services', `select=*&id=eq.${encodeURIComponent(updated.service_id)}`),
+    ]);
+
+    if (provider?.user_id) {
+      await SupabaseDb.insertOne('notifications', {
+        user_id: provider.user_id,
+        type: 'SYSTEM_ALERT',
+        title: action === 'APPROVE' ? 'Service Approved by Admin!' : 'Service Request Update',
+        message: action === 'APPROVE'
+          ? `Your service "${service?.name || 'Service'}" (₹${updated.custom_price || service?.base_price}) has been approved by admin and is now LIVE for customers to book!`
+          : `Your service "${service?.name || 'Service'}" request was rejected.${reason ? ' Reason: ' + reason : ''}`,
+        data: { rateId, status, serviceName: service?.name },
+      }).catch(() => {});
+    }
+
     await SupabaseDb.insertOne('audit_logs', {
       user_id: adminUserId,
       action: `RATE_CARD_${status}`,
       entity_type: 'ProviderServiceRate',
       entity_id: rateId,
-      details: JSON.stringify({ status, reason: reason || null }),
+      details: JSON.stringify({ status, reason: reason || null, serviceName: service?.name }),
     }).catch(() => {});
 
+    SupabaseDb.broadcastSync('rates_updated', { rateId, status, providerId: updated.provider_id });
     SupabaseDb.broadcastSync('catalog_updated', { entity: 'rate_card', id: rateId });
     return updated;
   }
@@ -702,21 +720,76 @@ export class AdminService {
   }
 
   static async getBanners(activeOnly = false) {
+    const DEFAULT_PROMO_BANNERS = [
+      {
+        id: 'promo-banner-1',
+        title: 'Spa & Salon at Home',
+        subtitle: 'Relax & Rejuvenate - Book Spa & Salon Services',
+        cta_text: 'Book Now',
+        image_url: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800&auto=format&fit=crop&q=80',
+        target_screen: 'Category',
+        city: 'All Cities',
+        display_order: 1,
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 'promo-banner-2',
+        title: 'Home Cleaning Experts',
+        subtitle: 'Flat ₹200 OFF on First Full House Deep Cleaning',
+        cta_text: 'Claim Offer',
+        image_url: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80',
+        target_screen: 'Category',
+        city: 'All Cities',
+        display_order: 2,
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 'promo-banner-3',
+        title: 'AC Service & Repair',
+        subtitle: 'Summer Special - Multi-point diagnostic check from ₹399',
+        cta_text: 'Explore',
+        image_url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&auto=format&fit=crop&q=80',
+        target_screen: 'Category',
+        city: 'All Cities',
+        display_order: 3,
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
+
     try {
       const filter = activeOnly
         ? 'select=*&is_active=eq.true&order=display_order.asc,created_at.desc'
         : 'select=*&order=display_order.asc,created_at.desc';
       const rows = await SupabaseDb.select<any>('banners', filter);
-      return rows.map((r) => this.mapBannerRow(r));
-    } catch (err: any) {
-      if (err instanceof SupabaseDbError && err.code === 'PGRST205') {
-        const setting = await SupabaseDb.selectOne<any>('system_settings', 'select=*&key=eq.promotional_banners');
-        const list = this.parseSettingValue<any[]>(setting?.value, []);
-        const arr = Array.isArray(list) ? list : [];
-        const filtered = activeOnly ? arr.filter((b: any) => b.is_active !== false && b.isActive !== false) : arr;
-        return filtered.map((b) => this.mapBannerRow(b));
+      if (rows && rows.length > 0) {
+        return rows.map((r) => this.mapBannerRow(r));
       }
-      throw err;
+    } catch {}
+
+    try {
+      const setting = await SupabaseDb.selectOne<any>('system_settings', 'select=*&key=eq.promotional_banners');
+      let list = this.parseSettingValue<any[]>(setting?.value, []);
+      if (!Array.isArray(list) || list.length === 0) {
+        list = DEFAULT_PROMO_BANNERS;
+        await SupabaseDb.upsert(
+          'system_settings',
+          {
+            key: 'promotional_banners',
+            value: JSON.stringify(DEFAULT_PROMO_BANNERS),
+            updated_at: new Date().toISOString(),
+          },
+          'key'
+        ).catch(() => {});
+      }
+      const filtered = activeOnly
+        ? list.filter((b: any) => b.is_active !== false && b.isActive !== false)
+        : list;
+      return filtered.map((b) => this.mapBannerRow(b));
+    } catch {
+      return DEFAULT_PROMO_BANNERS.map((b) => this.mapBannerRow(b));
     }
   }
 

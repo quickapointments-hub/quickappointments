@@ -18,11 +18,19 @@ import {
   Bell,
   Check,
   Globe,
+  Wallet,
+  Receipt,
+  Tag,
+  HelpCircle as FaqIcon,
 } from 'lucide-react';
 
 export const CustomerProfileScreen: React.FC<{
   onOpenSupport?: () => void;
-}> = ({ onOpenSupport }) => {
+  onOpenWallet?: () => void;
+  onOpenTransactions?: () => void;
+  onOpenOffers?: () => void;
+  onOpenFaqs?: () => void;
+}> = ({ onOpenSupport, onOpenWallet, onOpenTransactions, onOpenOffers, onOpenFaqs }) => {
   const { user, switchRole, logout, refreshProfile } = useAuth();
   const { currentLanguage, languages, t } = useLanguage();
 
@@ -104,7 +112,9 @@ export const CustomerProfileScreen: React.FC<{
     }
   };
 
-  const activeLangObj = languages.find((l) => l.code === currentLanguage) || languages[0];
+  const activeLangObj =
+    languages.find((l) => l.code === currentLanguage) ||
+    languages[0] || { code: 'en', name: 'English', nativeName: 'English' };
 
   return (
     <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FDFCF4] text-[#111111] min-h-full">
@@ -157,6 +167,52 @@ export const CustomerProfileScreen: React.FC<{
 
       {/* Menu Links */}
       <div className="bg-white rounded-3xl border border-[#E8E4D9] divide-y divide-[#F2EFE8] overflow-hidden shadow-sm">
+        {/* Wallet & Balance */}
+        <div
+          onClick={onOpenWallet}
+          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-[#111111] font-semibold">
+            <Wallet className="w-4 h-4 text-[#65B32E]" />
+            <span>My Wallet & Balance</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-[#65B32E] px-2 py-0.5 rounded-full bg-[#EFF8E7]">
+              Manage Funds
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+          </div>
+        </div>
+
+        {/* Transaction History & Invoices */}
+        <div
+          onClick={onOpenTransactions}
+          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-[#111111] font-semibold">
+            <Receipt className="w-4 h-4 text-[#65B32E]" />
+            <span>Transactions & Receipts</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+        </div>
+
+        {/* Offers & Discount Coupons */}
+        <div
+          onClick={onOpenOffers}
+          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-[#111111] font-semibold">
+            <Tag className="w-4 h-4 text-[#65B32E]" />
+            <span>Offers & Coupons</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-[#65B32E] px-2 py-0.5 rounded-full bg-[#EFF8E7]">
+              Special Discounts
+            </span>
+            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+          </div>
+        </div>
+
         {/* Language Selection Option */}
         <div
           onClick={() => setShowLanguageModal(true)}
@@ -192,6 +248,17 @@ export const CustomerProfileScreen: React.FC<{
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <MapPin className="w-4 h-4 text-[#65B32E]" />
             <span>{t('saved_addresses')} ({addresses.length})</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+        </div>
+
+        <div
+          onClick={onOpenFaqs}
+          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+        >
+          <div className="flex items-center gap-3 text-[#111111] font-semibold">
+            <FaqIcon className="w-4 h-4 text-[#65B32E]" />
+            <span>Frequently Asked Questions</span>
           </div>
           <ChevronRight className="w-4 h-4 text-[#6B7280]" />
         </div>

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   ChevronRight,
   KeyRound,
+  Layers,
 } from 'lucide-react';
 import { IncomingRequestModal } from '../../components/IncomingRequestModal';
 import { BookingOtpModal } from '../../components/BookingOtpModal';
@@ -20,7 +21,8 @@ import { BookingOtpModal } from '../../components/BookingOtpModal';
 export const ProviderDashboardScreen: React.FC<{
   onNavigateToSchedule: () => void;
   onNavigateToEarnings: () => void;
-}> = ({ onNavigateToSchedule, onNavigateToEarnings }) => {
+  onNavigateToServices?: () => void;
+}> = ({ onNavigateToSchedule, onNavigateToEarnings, onNavigateToServices }) => {
   const { user, refreshProfile } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
   const [earnings, setEarnings] = useState<any>({ totalNet: 0, totalGross: 0 });
@@ -178,6 +180,23 @@ export const ProviderDashboardScreen: React.FC<{
         <p className="text-[11px] text-[#4B5563] mt-1 font-medium">
           Gross: ₹{(earnings.totalGross || 0).toLocaleString()} (Automated direct bank settlements)
         </p>
+      </div>
+
+      {/* Services & Menu Management Shortcut (Swiggy Partner Flow) */}
+      <div
+        onClick={onNavigateToServices}
+        className="p-4 rounded-2xl bg-white border border-[#E8E4D9] shadow-sm flex items-center justify-between cursor-pointer hover:border-[#65B32E] transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-[#EFF8E7] text-[#111111] border border-[#65B32E]/30">
+            <Layers className="w-4 h-4 text-[#65B32E]" />
+          </div>
+          <div>
+            <h4 className="font-bold text-xs text-[#111111]">My Services & Menu (Swiggy Partner Flow)</h4>
+            <p className="text-[10px] text-[#4B5563]">Upload services, custom pricing & view live Admin approvals</p>
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-[#6B7280]" />
       </div>
 
       {/* Working Hours Shortcut */}

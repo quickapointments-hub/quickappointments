@@ -20,17 +20,60 @@ export class CatalogService {
   }
 
   static async getServices(categoryId?: string, search?: string, includeInactive = false) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const categories = await SupabaseDb.select<any>('categories', 'select=*');
+    const catMap = new Map(categories.map((c) => [c.id, c]));
+
+    let resolvedCategoryId: string | undefined = undefined;
+    if (categoryId && categoryId.trim()) {
+      const trimmed = categoryId.trim();
+      if (isUuid.test(trimmed)) {
+        resolvedCategoryId = trimmed;
+      } else {
+        const needle = trimmed.toLowerCase();
+        const SYNONYMS: Record<string, string[]> = {
+          beauty: ['salon', 'grooming', 'beauty', 'spa'],
+          salon: ['salon', 'grooming', 'beauty'],
+          hair: ['salon', 'grooming', 'hair'],
+          cleaning: ['cleaning', 'clean', 'home repairs'],
+          repair: ['repair', 'repairs', 'ac', 'plumbing', 'home repairs'],
+          plumbing: ['plumbing', 'repair', 'repairs', 'home repairs'],
+          ac: ['ac', 'repairs', 'home repairs'],
+          auto: ['auto', 'car', 'detailing'],
+          car: ['auto', 'car', 'detailing'],
+          wellness: ['health', 'wellness', 'spa', 'healthcare'],
+        };
+        const relatedTerms = [needle, ...(SYNONYMS[needle] || [])];
+
+        const matched = categories.find((c) => {
+          const cSlug = (c.slug || '').toLowerCase();
+          const cName = (c.name || '').toLowerCase();
+          return relatedTerms.some(
+            (term) =>
+              c.id === trimmed ||
+              cSlug === term ||
+              cName === term ||
+              cName.includes(term) ||
+              (cSlug && cSlug.includes(term)) ||
+              term.includes(cSlug)
+          );
+        });
+        if (matched) {
+          resolvedCategoryId = matched.id;
+        } else {
+          // Non-existent category requested; return clean empty list
+          return [];
+        }
+      }
+    }
+
     const filters = ['select=*'];
     if (!includeInactive) filters.push('is_active=eq.true');
-    if (categoryId) filters.push(`category_id=eq.${encodeURIComponent(categoryId)}`);
+    if (resolvedCategoryId) filters.push(`category_id=eq.${encodeURIComponent(resolvedCategoryId)}`);
     filters.push('order=name.asc');
 
-    const [services, categories] = await Promise.all([
-      SupabaseDb.select<any>('services', filters.join('&')),
-      SupabaseDb.select<any>('categories', 'select=*'),
-    ]);
+    const services = await SupabaseDb.select<any>('services', filters.join('&'));
 
-    const catMap = new Map(categories.map((c) => [c.id, c]));
     let mapped = services
       .map((s) => mapServiceDto(s, catMap.get(s.category_id)))
       .filter((s): s is NonNullable<typeof s> => Boolean(s));

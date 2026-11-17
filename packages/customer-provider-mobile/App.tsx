@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Image,
   Platform,
   Dimensions,
+  NativeModules,
 } from 'react-native';
 import { registerRootComponent } from 'expo';
 import { RN_COLORS as COLORS, THEME_COLORS } from './src/theme';
@@ -57,6 +58,49 @@ const ALL_12_CATEGORIES = [
   { id: 'pet', name: 'Pet Care', shortName: 'Pet Care', icon: '🐾', badgeColor: '#EAF7E3' },
   { id: 'it', name: 'IT & Electronics\nServices', shortName: 'IT & Electronics Services', icon: '💻', badgeColor: '#EAF7E3' },
   { id: 'more', name: 'More\nServices', shortName: 'More Services', icon: '▦', badgeColor: '#EAF7E3' },
+];
+
+// Subcategories (Matching Category Detail Screen in Image 1)
+const BEAUTY_SUBCATEGORIES_DATA = [
+  { id: 'sub_hair', name: 'Hair Care', icon: '✂️' },
+  { id: 'sub_skin', name: 'Skin Care', icon: '🧖' },
+  { id: 'sub_makeup', name: 'Makeup', icon: '💄' },
+  { id: 'sub_nail', name: 'Nail Care', icon: '💅' },
+  { id: 'sub_eye', name: 'Eye Care', icon: '👁️' },
+  { id: 'sub_facial', name: 'Facial & Spa', icon: '💆' },
+  { id: 'sub_men', name: "Men's Grooming", icon: '🧔' },
+  { id: 'sub_pkg', name: 'Salon Packages', icon: '🪷' },
+];
+
+// Popular Services (Matching Category Detail Screen in Image 1)
+const BEAUTY_POPULAR_SERVICES_DATA = [
+  {
+    id: 'bps_facial',
+    name: 'Facial Clean Up',
+    subcategoryId: 'sub_skin',
+    duration: '45 mins',
+    price: 499,
+    imageUrl: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&auto=format&fit=crop&q=80',
+    provider: { id: 'fp1', name: 'Glow Beauty Salon', categoryName: 'Beauty & Salon' },
+  },
+  {
+    id: 'bps_haircut',
+    name: 'Hair Cut',
+    subcategoryId: 'sub_hair',
+    duration: '30 mins',
+    price: 299,
+    imageUrl: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&auto=format&fit=crop&q=80',
+    provider: { id: 'fp1', name: 'Glow Beauty Salon', categoryName: 'Beauty & Salon' },
+  },
+  {
+    id: 'bps_mani_pedi',
+    name: 'Manicure & Pedicure',
+    subcategoryId: 'sub_nail',
+    duration: '60 mins',
+    price: 799,
+    imageUrl: 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop&q=80',
+    provider: { id: 'fp1', name: 'Glow Beauty Salon', categoryName: 'Beauty & Salon' },
+  },
 ];
 
 const AVAILABLE_CITIES = ['Warangal', 'Hyderabad', 'Bengaluru', 'Mumbai', 'Delhi NCR', 'Chennai', 'Pune'];
@@ -543,6 +587,122 @@ const OtpPhoneIllustration = () => (
     </View>
   </View>
 );
+
+// ----------------------------------------------------
+// DYNAMIC METRO / LOCALHOST API RESOLUTION
+// ----------------------------------------------------
+const getCandidateApiUrls = (): string[] => {
+  const urls: string[] = [];
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    urls.push(process.env.EXPO_PUBLIC_API_URL);
+  }
+  try {
+    const scriptURL = (NativeModules as any)?.SourceCode?.scriptURL;
+    if (scriptURL && typeof scriptURL === 'string') {
+      const match = scriptURL.match(/^https?:\/\/([^/:]+)/);
+      if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+        urls.push(`http://${match[1]}:4000/api`);
+      }
+    }
+  } catch {}
+  if (Platform.OS === 'android') {
+    urls.push('http://10.0.2.2:4000/api');
+  }
+  urls.push('http://localhost:4000/api');
+  urls.push('http://127.0.0.1:4000/api');
+  return Array.from(new Set(urls.filter(Boolean)));
+};
+
+// ----------------------------------------------------
+// AUTO-ADVANCING 6-DIGIT OTP INPUT COMPONENT
+// ----------------------------------------------------
+interface OtpInputBoxesProps {
+  digits: string[];
+  onChangeDigits: (digits: string[]) => void;
+  autoFocus?: boolean;
+}
+
+const OtpInputBoxes: React.FC<OtpInputBoxesProps> = ({
+  digits,
+  onChangeDigits,
+  autoFocus = true,
+}) => {
+  const inputRefs = useRef<Array<any>>([]);
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+
+  const handleChangeText = (text: string, index: number) => {
+    const clean = text.replace(/[^0-9]/g, '');
+
+    // Handle paste or multi-digit entry (e.g. "123456")
+    if (clean.length > 1) {
+      const next = [...digits];
+      const chars = clean.slice(0, 6).split('');
+      for (let i = 0; i < 6; i++) {
+        next[i] = chars[i] || '';
+      }
+      onChangeDigits(next);
+      const nextFocus = Math.min(chars.length, 5);
+      inputRefs.current[nextFocus]?.focus?.();
+      return;
+    }
+
+    const next = [...digits];
+    next[index] = clean;
+    onChangeDigits(next);
+
+    // Auto-advance to next box when a digit is entered
+    if (clean && index < 5) {
+      inputRefs.current[index + 1]?.focus?.();
+    }
+  };
+
+  const handleKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent?.key === 'Backspace') {
+      if (!digits[index] && index > 0) {
+        const next = [...digits];
+        next[index - 1] = '';
+        onChangeDigits(next);
+        inputRefs.current[index - 1]?.focus?.();
+      }
+    }
+  };
+
+  return (
+    <View style={authStyles.otpBoxesRow}>
+      {[0, 1, 2, 3, 4, 5].map((idx) => {
+        const val = digits[idx] || '';
+        const isFocused = focusedIndex === idx;
+        return (
+          <View
+            key={idx}
+            style={[
+              authStyles.otpSquareBox,
+              val ? authStyles.otpSquareBoxActive : null,
+              isFocused ? { borderColor: '#16A34A', borderWidth: 2 } : null,
+            ]}
+          >
+            <TextInput
+              ref={(ref: any) => {
+                inputRefs.current[idx] = ref;
+              }}
+              style={authStyles.otpDigitText}
+              keyboardType="number-pad"
+              maxLength={idx === 0 ? 6 : 1}
+              value={val}
+              onChangeText={(text) => handleChangeText(text, idx)}
+              onKeyPress={(e) => handleKeyPress(e, idx)}
+              onFocus={() => setFocusedIndex(idx)}
+              onBlur={() => setFocusedIndex(-1)}
+              textAlign="center"
+              selectTextOnFocus
+              autoFocus={autoFocus && idx === 0}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+};
 
 // ----------------------------------------------------
 // SCALLOPED GREEN REGISTRATION SUCCESS BADGE (Matching Reference Screen 4)
@@ -1180,7 +1340,7 @@ function App() {
     };
   }, []);
 
-  // Mobile Number Registration & Validation Check (Backend API sole source of truth)
+  // Mobile Number Registration & Validation Check (Backend API sole source of truth with instant Supabase fallback)
   const isMobileNumberRegistered = async (
     phone: string
   ): Promise<{ registered: boolean; user?: any }> => {
@@ -1188,18 +1348,19 @@ function App() {
     const last10 = clean.length >= 10 ? clean.slice(-10) : clean;
     if (!last10 || last10.length < 10) return { registered: false };
 
-    const apiCandidates = [
-      process.env.EXPO_PUBLIC_API_URL,
-      Platform.OS === 'android' ? 'http://10.0.2.2:4000/api' : 'http://localhost:4000/api',
-      'http://localhost:4000/api',
-    ].filter(Boolean) as string[];
-    for (const backendUrl of Array.from(new Set(apiCandidates))) {
+    // 1. Try Backend API candidates with fast 2.5s timeout to prevent UI freeze
+    const apiCandidates = getCandidateApiUrls();
+    for (const backendUrl of apiCandidates) {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
         const res = await fetch(`${backendUrl}/auth/check-phone`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone: last10 }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         if (res.ok) {
           const json = await res.json();
           if (json.registered) {
@@ -1209,6 +1370,18 @@ function App() {
         }
       } catch {}
     }
+
+    // 2. Direct Supabase query fallback (zero latency, bypasses local firewall/port issues on phone)
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, is_active')
+        .or(`phone.eq.${last10},phone.eq.+91${last10},phone.ilike.*${last10}*`)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        return { registered: true, user: data[0] };
+      }
+    } catch {}
 
     return { registered: false };
   };
@@ -1381,24 +1554,12 @@ function App() {
       ].filter(Boolean);
       const formattedAddress = fullAddressParts.join(', ');
 
-      const candidateUrls = [
-        Platform.OS === 'android' ? 'http://10.0.2.2:4000/api' : 'http://localhost:4000/api',
-        'http://127.0.0.1:4000/api',
-        'http://localhost:4000/api',
-      ];
-      if (process.env.EXPO_PUBLIC_API_URL) {
-        candidateUrls.unshift(process.env.EXPO_PUBLIC_API_URL);
-        if (Platform.OS === 'android') {
-          candidateUrls.unshift(
-            process.env.EXPO_PUBLIC_API_URL.replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2')
-          );
-        }
-      }
+      const candidateUrls = getCandidateApiUrls();
 
-      for (const url of Array.from(new Set(candidateUrls))) {
+      for (const url of candidateUrls) {
         try {
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 5000);
+          const timeout = setTimeout(() => controller.abort(), 3500);
           const res = await fetch(`${url}/auth/register-customer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1420,7 +1581,45 @@ function App() {
           }
         } catch {}
       }
-      throw new Error('Unable to reach Quick Appointments server to register account.');
+
+      // Supabase direct fallback if backend port 4000 is unreachable from physical device
+      const existingUser = await supabase
+        .from('users')
+        .select('id')
+        .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
+        .maybeSingle();
+
+      let userId = existingUser.data?.id;
+      if (!userId) {
+        const { data: newUser, error: userErr } = await supabase
+          .from('users')
+          .insert({
+            phone: cleanPhone,
+            full_name: userData.fullName,
+            email: userData.email || `${cleanPhone}@quickappointments.app`,
+            is_active: true,
+          })
+          .select('id')
+          .single();
+        if (userErr) throw userErr;
+        userId = newUser.id;
+
+        await supabase.from('user_roles').insert({
+          user_id: userId,
+          role: 'CUSTOMER',
+        });
+      }
+
+      await supabase.from('customer_profiles').upsert(
+        {
+          user_id: userId,
+          city: userData.city || 'Warangal',
+          default_address: formattedAddress,
+        },
+        { onConflict: 'user_id' }
+      );
+
+      return { success: true, userId };
     } catch (err) {
       console.warn('registerUserInDb error:', err);
       throw err;
@@ -1758,7 +1957,10 @@ function App() {
   }, [selectedCityName]);
 
   // Customer State
-  const [customerTab, setCustomerTab] = useState<'home' | 'search' | 'bookings' | 'favorites' | 'profile' | 'all_categories'>('home');
+  const [customerTab, setCustomerTab] = useState<'home' | 'search' | 'bookings' | 'favorites' | 'profile' | 'all_categories' | 'category_detail'>('home');
+  const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<any>(ALL_12_CATEGORIES[0]);
+  const [activeSubcategoryFilter, setActiveSubcategoryFilter] = useState<string | null>(null);
+  const [isCategoryDetailFavorite, setIsCategoryDetailFavorite] = useState(false);
   const [customerCity, setCustomerCity] = useState(selectedCityName || 'Warangal');
   const [cityPickerModalVisible, setCityPickerModalVisible] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>(['Home Cleaning', 'Beauty & Salon', 'Plumbing']);
@@ -2381,7 +2583,7 @@ function App() {
 
                     // Existing registered user: proceed with OTP verification
                     setOtpCountdown(28);
-                    setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                    setAuthOtpDigits(['', '', '', '', '', '']);
                     setAuthStep('otp_login');
                   } catch (err: any) {
                     setIsCheckingMobile(false);
@@ -2996,12 +3198,17 @@ function App() {
                 }
 
                 setOtpCountdown(28);
-                setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                setAuthOtpDigits(['', '', '', '', '', '']);
                 setAuthStep('otp_user');
               }}
               activeOpacity={0.85}
+              disabled={isSubmittingDb}
             >
-              <Text style={authStyles.primaryPillBtnText}>Create Account</Text>
+              {isSubmittingDb ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={authStyles.primaryPillBtnText}>Create Account</Text>
+              )}
             </TouchableOpacity>
 
             <View style={{ height: 28 }} />
@@ -3040,35 +3247,38 @@ function App() {
               <View style={{ width: 44, height: 44 }} />
             </View>
 
-            {/* Title & Subtitle with Registered Mobile */}
+            {/* Title & Subtitle with Registered Mobile and Edit Button */}
             <Text style={authStyles.screenTitle}>Verify Mobile Number</Text>
-            <Text style={authStyles.screenSubtitle}>
-              Enter the 6-digit OTP code sent to{'\n'}+91 {userRegMobile}
-            </Text>
-
-            {/* 6 Individual Square OTP Boxes */}
-            <View style={authStyles.otpBoxesRow}>
-              {[0, 1, 2, 3, 4, 5].map((idx) => {
-                const val = authOtpDigits[idx] || '';
-                return (
-                  <View key={idx} style={[authStyles.otpSquareBox, val ? authStyles.otpSquareBoxActive : null]}>
-                    <TextInput
-                      style={authStyles.otpDigitText}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={val}
-                      onChangeText={(digit) => {
-                        const nextDigits = [...authOtpDigits];
-                        nextDigits[idx] = digit;
-                        setAuthOtpDigits(nextDigits);
-                      }}
-                      textAlign="center"
-                      selectTextOnFocus
-                    />
-                  </View>
-                );
-              })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 18, flexWrap: 'wrap' }}>
+              <Text style={authStyles.screenSubtitle}>
+                Enter the 6-digit OTP code sent to +91 {userRegMobile}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setAuthStep('register_user')}
+                style={{ marginLeft: 8 }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={authStyles.editText}>Edit ✎</Text>
+              </TouchableOpacity>
             </View>
+
+            {/* 6 Individual Square OTP Boxes with Auto-Advance & Backspace handling */}
+            <OtpInputBoxes
+              digits={authOtpDigits}
+              onChangeDigits={setAuthOtpDigits}
+            />
+
+            {/* Optional Dev Quick Fill */}
+            <TouchableOpacity
+              onPress={() => setAuthOtpDigits(['1', '2', '3', '4', '5', '6'])}
+              style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 4 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '600' }}>
+                Auto-fill test code (123456)
+              </Text>
+            </TouchableOpacity>
 
             {/* Resend OTP Section */}
             <View style={authStyles.resendContainer}>
@@ -3081,7 +3291,7 @@ function App() {
                 <TouchableOpacity
                   onPress={() => {
                     setOtpCountdown(28);
-                    setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                    setAuthOtpDigits(['', '', '', '', '', '']);
                     Alert.alert('OTP Resent', `A new 6-digit OTP code has been sent to +91 ${userRegMobile}`);
                   }}
                   activeOpacity={0.7}
@@ -3095,8 +3305,10 @@ function App() {
 
             {/* Verify & Continue Button */}
             <TouchableOpacity
-              style={authStyles.primaryPillBtn}
+              style={[authStyles.primaryPillBtn, isSubmittingDb ? { opacity: 0.7 } : null]}
+              disabled={isSubmittingDb}
               onPress={async () => {
+                if (isSubmittingDb) return;
                 const entered = authOtpDigits.join('');
                 if (entered.length < 6) {
                   Alert.alert('Incomplete OTP', 'Please enter the full 6-digit OTP code.');
@@ -3125,7 +3337,11 @@ function App() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={authStyles.primaryPillBtnText}>Verify & Continue</Text>
+              {isSubmittingDb ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={authStyles.primaryPillBtnText}>Verify & Continue</Text>
+              )}
             </TouchableOpacity>
 
             <View style={{ height: 28 }} />
@@ -4193,7 +4409,7 @@ function App() {
                       return;
                     }
                     setOtpCountdown(28);
-                    setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                    setAuthOtpDigits(['', '', '', '', '', '']);
                     setAuthStep('otp_provider');
                   }}
                   activeOpacity={0.85}
@@ -4406,35 +4622,41 @@ function App() {
               <View style={{ width: 44, height: 44 }} />
             </View>
 
-            {/* Title & Subtitle with Registered Mobile */}
+            {/* Title & Subtitle with Registered Mobile and Edit Button */}
             <Text style={authStyles.screenTitle}>Verify Mobile Number</Text>
-            <Text style={authStyles.screenSubtitle}>
-              Enter the 6-digit OTP code sent to{'\n'}+91 {provRegMobile}
-            </Text>
-
-            {/* 6 Individual Square OTP Boxes */}
-            <View style={authStyles.otpBoxesRow}>
-              {[0, 1, 2, 3, 4, 5].map((idx) => {
-                const val = authOtpDigits[idx] || '';
-                return (
-                  <View key={idx} style={[authStyles.otpSquareBox, val ? authStyles.otpSquareBoxActive : null]}>
-                    <TextInput
-                      style={authStyles.otpDigitText}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={val}
-                      onChangeText={(digit) => {
-                        const nextDigits = [...authOtpDigits];
-                        nextDigits[idx] = digit;
-                        setAuthOtpDigits(nextDigits);
-                      }}
-                      textAlign="center"
-                      selectTextOnFocus
-                    />
-                  </View>
-                );
-              })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 18, flexWrap: 'wrap' }}>
+              <Text style={authStyles.screenSubtitle}>
+                Enter the 6-digit OTP code sent to +91 {provRegMobile}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setProviderStep(1);
+                  setAuthStep('register_provider');
+                }}
+                style={{ marginLeft: 8 }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={authStyles.editText}>Edit ✎</Text>
+              </TouchableOpacity>
             </View>
+
+            {/* 6 Individual Square OTP Boxes with Auto-Advance & Backspace handling */}
+            <OtpInputBoxes
+              digits={authOtpDigits}
+              onChangeDigits={setAuthOtpDigits}
+            />
+
+            {/* Optional Dev Quick Fill */}
+            <TouchableOpacity
+              onPress={() => setAuthOtpDigits(['1', '2', '3', '4', '5', '6'])}
+              style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 4 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '600' }}>
+                Auto-fill test code (123456)
+              </Text>
+            </TouchableOpacity>
 
             {/* Resend OTP Section */}
             <View style={authStyles.resendContainer}>
@@ -4447,7 +4669,7 @@ function App() {
                 <TouchableOpacity
                   onPress={() => {
                     setOtpCountdown(28);
-                    setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                    setAuthOtpDigits(['', '', '', '', '', '']);
                     Alert.alert('OTP Resent', `A new 6-digit OTP has been sent to +91 ${provRegMobile}`);
                   }}
                   activeOpacity={0.7}
@@ -4461,8 +4683,10 @@ function App() {
 
             {/* Verify & Continue Button */}
             <TouchableOpacity
-              style={authStyles.primaryPillBtn}
+              style={[authStyles.primaryPillBtn, isSubmittingDb ? { opacity: 0.7 } : null]}
+              disabled={isSubmittingDb}
               onPress={async () => {
+                if (isSubmittingDb) return;
                 const entered = authOtpDigits.join('');
                 if (entered.length < 6) {
                   Alert.alert('Incomplete OTP', 'Please enter the full 6-digit OTP code.');
@@ -4503,7 +4727,11 @@ function App() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={authStyles.primaryPillBtnText}>Verify & Continue</Text>
+              {isSubmittingDb ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={authStyles.primaryPillBtnText}>Verify & Continue</Text>
+              )}
             </TouchableOpacity>
 
             <View style={{ height: 28 }} />
@@ -4769,29 +4997,22 @@ function App() {
               </TouchableOpacity>
             </View>
 
-            {/* 6 Individual Square OTP Boxes */}
-            <View style={authStyles.otpBoxesRow}>
-              {[0, 1, 2, 3, 4, 5].map((idx) => {
-                const val = authOtpDigits[idx] || '';
-                return (
-                  <View key={idx} style={[authStyles.otpSquareBox, val ? authStyles.otpSquareBoxActive : null]}>
-                    <TextInput
-                      style={authStyles.otpDigitText}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={val}
-                      onChangeText={(digit) => {
-                        const nextDigits = [...authOtpDigits];
-                        nextDigits[idx] = digit;
-                        setAuthOtpDigits(nextDigits);
-                      }}
-                      textAlign="center"
-                      selectTextOnFocus
-                    />
-                  </View>
-                );
-              })}
-            </View>
+            {/* 6 Individual Square OTP Boxes with Auto-Advance & Backspace handling */}
+            <OtpInputBoxes
+              digits={authOtpDigits}
+              onChangeDigits={setAuthOtpDigits}
+            />
+
+            {/* Optional Dev Quick Fill */}
+            <TouchableOpacity
+              onPress={() => setAuthOtpDigits(['1', '2', '3', '4', '5', '6'])}
+              style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 4 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '600' }}>
+                Auto-fill test code (123456)
+              </Text>
+            </TouchableOpacity>
 
             {/* Resend OTP Section */}
             <View style={authStyles.resendContainer}>
@@ -4804,7 +5025,7 @@ function App() {
                 <TouchableOpacity
                   onPress={() => {
                     setOtpCountdown(28);
-                    setAuthOtpDigits(['1', '2', '3', '4', '5', '6']);
+                    setAuthOtpDigits(['', '', '', '', '', '']);
                     Alert.alert('OTP Resent', `A new verification OTP has been sent to +91 ${authMobile}`);
                   }}
                   activeOpacity={0.7}
@@ -4818,8 +5039,10 @@ function App() {
 
             {/* Verify & Continue Button */}
             <TouchableOpacity
-              style={authStyles.primaryPillBtn}
+              style={[authStyles.primaryPillBtn, isSubmittingDb ? { opacity: 0.7 } : null]}
+              disabled={isSubmittingDb}
               onPress={async () => {
+                if (isSubmittingDb) return;
                 const entered = authOtpDigits.join('');
                 if (entered.length < 6) {
                   Alert.alert('Incomplete OTP', 'Please enter the full 6-digit OTP code.');
@@ -4866,7 +5089,11 @@ function App() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={authStyles.primaryPillBtnText}>Verify & Continue →</Text>
+              {isSubmittingDb ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={authStyles.primaryPillBtnText}>Verify & Continue →</Text>
+              )}
             </TouchableOpacity>
 
             {/* Footer Terms */}
@@ -4901,27 +5128,29 @@ function App() {
 
       {/* Top Header */}
       {activeRole === 'customer' ? (
-        <View style={customerHomeStyles.headerRow}>
-          <View style={customerHomeStyles.headerLeft}>
-            <Image
-              source={require('./assets/splash-logo.png')}
-              style={customerHomeStyles.headerLogo}
-              resizeMode="contain"
-            />
-          </View>
+        customerTab !== 'category_detail' && (
+          <View style={customerHomeStyles.headerRow}>
+            <View style={customerHomeStyles.headerLeft}>
+              <Image
+                source={require('./assets/splash-logo.png')}
+                style={customerHomeStyles.headerLogo}
+                resizeMode="contain"
+              />
+            </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity
-              style={customerHomeStyles.locationPill}
-              onPress={() => setCityPickerModalVisible(true)}
-              activeOpacity={0.75}
-            >
-              <Text style={customerHomeStyles.locationPinIcon}>📍</Text>
-              <Text style={customerHomeStyles.locationText}>{customerCity}</Text>
-              <Text style={customerHomeStyles.locationChevron}>⌄</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={customerHomeStyles.locationPill}
+                onPress={() => setCityPickerModalVisible(true)}
+                activeOpacity={0.75}
+              >
+                <Text style={customerHomeStyles.locationPinIcon}>📍</Text>
+                <Text style={customerHomeStyles.locationText}>{customerCity}</Text>
+                <Text style={customerHomeStyles.locationChevron}>⌄</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )
       ) : (
         <View style={styles.topHeader}>
           <View style={styles.topHeaderLeft}>
@@ -5022,8 +5251,8 @@ function App() {
                     key={cat.id}
                     style={customerHomeStyles.topCatCard}
                     onPress={() => {
-                      setSearchQuery(cat.shortName);
-                      setCustomerTab('search');
+                      setSelectedCategoryDetail(cat);
+                      setCustomerTab('category_detail');
                     }}
                     activeOpacity={0.75}
                   >
@@ -5112,10 +5341,6 @@ function App() {
                       )}
                     </View>
                     <Text style={customerHomeStyles.featuredCategory}>{prov.categoryName}</Text>
-                    <Text style={customerHomeStyles.featuredRating}>
-                      ⭐ <Text style={{ fontWeight: '700', color: '#111111' }}>{prov.rating}</Text>{' '}
-                      ({prov.reviewsCount})
-                    </Text>
                   </View>
                   <TouchableOpacity
                     style={customerHomeStyles.featuredBookBtn}
@@ -5198,9 +5423,6 @@ function App() {
                             <Text style={styles.providerCategory}>
                               {provider.categoryName} • {provider.distance}
                             </Text>
-                          </View>
-                          <View style={styles.ratingBadge}>
-                            <Text style={styles.ratingText}>⭐ {provider.rating}</Text>
                           </View>
                         </View>
                         <View style={styles.servicesDivider} />
@@ -5285,7 +5507,10 @@ function App() {
                       <TouchableOpacity
                         key={cat.id}
                         style={customerHomeStyles.exploreCatTile}
-                        onPress={() => setSearchQuery(cat.shortName)}
+                        onPress={() => {
+                          setSelectedCategoryDetail(cat);
+                          setCustomerTab('category_detail');
+                        }}
                       >
                         <View style={customerHomeStyles.catIconCircle}>
                           <Text style={customerHomeStyles.catIconEmoji}>{cat.icon}</Text>
@@ -5348,8 +5573,12 @@ function App() {
                     key={cat.id}
                     style={customerHomeStyles.allCatGridItem}
                     onPress={() => {
-                      setSearchQuery(cat.shortName === 'More Services' ? '' : cat.shortName);
-                      setCustomerTab('search');
+                      if (cat.id === 'more') {
+                        setCategoryFilterSearch('');
+                      } else {
+                        setSelectedCategoryDetail(cat);
+                        setCustomerTab('category_detail');
+                      }
                     }}
                     activeOpacity={0.75}
                   >
@@ -5362,6 +5591,219 @@ function App() {
                   </TouchableOpacity>
                 ))}
               </View>
+              <View style={{ height: 100 }} />
+            </ScrollView>
+          )}
+
+          {/* 3.5. CATEGORY DETAIL SCREEN (Matching Image 1: Beauty & Salon) */}
+          {customerTab === 'category_detail' && (
+            <ScrollView
+              style={styles.scrollContent}
+              contentContainerStyle={customerHomeStyles.scrollPadding}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Header: Back Button, Title, Subtitle, Search and Favorite Icons */}
+              <View style={customerHomeStyles.catDetailHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <TouchableOpacity
+                    onPress={() => setCustomerTab('all_categories')}
+                    style={customerHomeStyles.backCircleBtn}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111111' }}>←</Text>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={customerHomeStyles.catDetailHeaderTitle} numberOfLines={1}>
+                      {selectedCategoryDetail?.shortName || 'Beauty & Salon'}
+                    </Text>
+                    <Text style={customerHomeStyles.catDetailHeaderSub} numberOfLines={1}>
+                      Explore salon and beauty services near you
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    style={customerHomeStyles.backCircleBtn}
+                    onPress={() => {
+                      setSearchQuery(selectedCategoryDetail?.shortName || '');
+                      setCustomerTab('search');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ fontSize: 16 }}>🔍</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={customerHomeStyles.backCircleBtn}
+                    onPress={() => setIsCategoryDetailFavorite((prev) => !prev)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ fontSize: 18, color: '#16A34A' }}>
+                      {isCategoryDetailFavorite ? '💚' : '♡'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Hero Banner (Matching Image 1: Mint card, Heading, Subtitle, Beauty Photo) */}
+              <View style={customerHomeStyles.catDetailHero}>
+                <View style={customerHomeStyles.catDetailHeroLeft}>
+                  <Text style={customerHomeStyles.catDetailHeroTitle}>
+                    {selectedCategoryDetail?.shortName || 'Beauty & Salon'}
+                  </Text>
+                  <Text style={customerHomeStyles.catDetailHeroSub}>
+                    Hair, Skin, Makeup & More{'\n'}at Your Convenience
+                  </Text>
+                </View>
+                <Image
+                  source={{
+                    uri: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500&auto=format&fit=crop&q=80',
+                  }}
+                  style={customerHomeStyles.catDetailHeroImg}
+                  resizeMode="cover"
+                />
+              </View>
+
+              {/* Subcategories (Matching Image 1: 4x2 Grid of 8 Cards) */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={customerHomeStyles.sectionHeader}>
+                  <Text style={customerHomeStyles.sectionTitle}>Subcategories</Text>
+                  {activeSubcategoryFilter && (
+                    <TouchableOpacity onPress={() => setActiveSubcategoryFilter(null)}>
+                      <Text style={customerHomeStyles.viewAllText}>Reset</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={customerHomeStyles.subcatGrid}>
+                  {BEAUTY_SUBCATEGORIES_DATA.map((sub) => {
+                    const isSelected = activeSubcategoryFilter === sub.id;
+                    return (
+                      <TouchableOpacity
+                        key={sub.id}
+                        style={[
+                          customerHomeStyles.subcatCard,
+                          isSelected && customerHomeStyles.subcatCardActive,
+                        ]}
+                        onPress={() =>
+                          setActiveSubcategoryFilter((prev) => (prev === sub.id ? null : sub.id))
+                        }
+                        activeOpacity={0.75}
+                      >
+                        <View
+                          style={[
+                            customerHomeStyles.subcatIconCircle,
+                            isSelected && customerHomeStyles.subcatIconCircleActive,
+                          ]}
+                        >
+                          <Text style={customerHomeStyles.subcatIconText}>{sub.icon}</Text>
+                        </View>
+                        <Text style={customerHomeStyles.subcatLabel} numberOfLines={2}>
+                          {sub.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Popular Services (Matching Image 1: Facial Clean Up, Hair Cut, Manicure & Pedicure) */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={customerHomeStyles.sectionHeader}>
+                  <Text style={customerHomeStyles.sectionTitle}>Popular Services</Text>
+                  <TouchableOpacity onPress={() => setActiveSubcategoryFilter(null)}>
+                    <Text style={customerHomeStyles.viewAllText}>View All</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={customerHomeStyles.popularServicesScroll}
+                >
+                  {BEAUTY_POPULAR_SERVICES_DATA.filter((svc) =>
+                    activeSubcategoryFilter ? svc.subcategoryId === activeSubcategoryFilter : true
+                  ).map((svc) => (
+                    <View key={svc.id} style={customerHomeStyles.popularServiceCard}>
+                      <Image
+                        source={{ uri: svc.imageUrl }}
+                        style={customerHomeStyles.popularServiceImg}
+                        resizeMode="cover"
+                      />
+                      <View style={customerHomeStyles.popularServiceBody}>
+                        <Text style={customerHomeStyles.popularServiceTitle} numberOfLines={1}>
+                          {svc.name}
+                        </Text>
+                        <Text style={customerHomeStyles.popularServiceDuration}>
+                          ⏱ {svc.duration}
+                        </Text>
+                        <Text style={customerHomeStyles.popularServicePrice}>
+                          ₹{svc.price}
+                        </Text>
+                        <TouchableOpacity
+                          style={customerHomeStyles.popularServiceBookBtn}
+                          onPress={() =>
+                            openBookingModal(svc.provider, {
+                              id: svc.id,
+                              name: svc.name,
+                              price: svc.price,
+                              duration: svc.duration,
+                            })
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Text style={customerHomeStyles.popularServiceBookBtnText}>Book</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Verified Specialists */}
+              <View style={customerHomeStyles.sectionHeader}>
+                <Text style={customerHomeStyles.sectionTitle}>Verified Specialists</Text>
+              </View>
+              {FEATURED_PROVIDERS_DATA.map((prov) => (
+                <View key={prov.id} style={customerHomeStyles.featuredProviderCard}>
+                  <Image
+                    source={{ uri: prov.avatarUrl }}
+                    style={customerHomeStyles.featuredAvatar}
+                    resizeMode="cover"
+                  />
+                  <View style={customerHomeStyles.featuredInfo}>
+                    <View style={customerHomeStyles.featuredTitleRow}>
+                      <Text style={customerHomeStyles.featuredName}>{prov.name}</Text>
+                      {prov.isVerified && (
+                        <View style={customerHomeStyles.verifiedCheckCircle}>
+                          <Text style={customerHomeStyles.verifiedCheckText}>✓</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={customerHomeStyles.featuredCategory}>
+                      {selectedCategoryDetail?.shortName || prov.categoryName} • {customerCity}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={customerHomeStyles.popularServiceBookBtn}
+                    onPress={() =>
+                      openBookingModal(
+                        { id: prov.id, name: prov.name, categoryName: selectedCategoryDetail?.shortName || prov.categoryName },
+                        {
+                          id: `${prov.id}_consultation`,
+                          name: `${selectedCategoryDetail?.shortName || 'Salon'} Specialist Session`,
+                          price: 499,
+                          duration: '45 mins',
+                        }
+                      )
+                    }
+                    activeOpacity={0.8}
+                  >
+                    <Text style={customerHomeStyles.popularServiceBookBtnText}>Book</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
               <View style={{ height: 100 }} />
             </ScrollView>
           )}
@@ -5392,7 +5834,6 @@ function App() {
                           )}
                         </View>
                         <Text style={customerHomeStyles.featuredCategory}>{prov.categoryName}</Text>
-                        <Text style={customerHomeStyles.featuredRating}>⭐ {prov.rating} ({prov.reviewsCount})</Text>
                       </View>
                       <TouchableOpacity
                         onPress={() =>
@@ -5649,13 +6090,13 @@ function App() {
               onPress={() => setCustomerTab('search')}
               activeOpacity={0.7}
             >
-              <Text style={[customerHomeStyles.bottomNavIcon, (customerTab === 'search' || customerTab === 'all_categories') && customerHomeStyles.bottomNavIconActive]}>
+              <Text style={[customerHomeStyles.bottomNavIcon, (customerTab === 'search' || customerTab === 'all_categories' || customerTab === 'category_detail') && customerHomeStyles.bottomNavIconActive]}>
                 🔍
               </Text>
-              <Text style={[customerHomeStyles.bottomNavLabel, (customerTab === 'search' || customerTab === 'all_categories') && customerHomeStyles.bottomNavLabelActive]}>
+              <Text style={[customerHomeStyles.bottomNavLabel, (customerTab === 'search' || customerTab === 'all_categories' || customerTab === 'category_detail') && customerHomeStyles.bottomNavLabelActive]}>
                 Search
               </Text>
-              {(customerTab === 'search' || customerTab === 'all_categories') && <View style={customerHomeStyles.bottomNavIndicator} />}
+              {(customerTab === 'search' || customerTab === 'all_categories' || customerTab === 'category_detail') && <View style={customerHomeStyles.bottomNavIndicator} />}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -10617,16 +11058,182 @@ const customerHomeStyles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
+  catDetailHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  catDetailHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#111111',
+  },
+  catDetailHeaderSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  catDetailHero: {
+    backgroundColor: '#EBF9EE',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CDE9D2',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 135,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  catDetailHeroLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  catDetailHeroTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#111111',
+    lineHeight: 23,
+  },
+  catDetailHeroSub: {
+    fontSize: 12.5,
+    color: '#374151',
+    fontWeight: '600',
+    marginTop: 5,
+    lineHeight: 18,
+  },
+  catDetailHeroImg: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+  },
+  subcatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  subcatCard: {
+    width: '23%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E4D9',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+    minHeight: 88,
+  },
+  subcatCardActive: {
+    borderColor: '#16A34A',
+    backgroundColor: '#EFF8E7',
+    borderWidth: 1.5,
+  },
+  subcatIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EBF9EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  subcatIconCircleActive: {
+    backgroundColor: '#16A34A',
+  },
+  subcatIconText: {
+    fontSize: 20,
+  },
+  subcatLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#111111',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  popularServicesScroll: {
+    gap: 12,
+    paddingBottom: 6,
+  },
+  popularServiceCard: {
+    width: 155,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E8E4D9',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  popularServiceImg: {
+    width: '100%',
+    height: 96,
+  },
+  popularServiceBody: {
+    padding: 10,
+  },
+  popularServiceTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#111111',
+    lineHeight: 16,
+  },
+  popularServiceDuration: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  popularServicePrice: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#16A34A',
+    marginTop: 4,
+  },
+  popularServiceBookBtn: {
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popularServiceBookBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#16A34A',
+  },
   bottomNavBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FDFCF4',
     borderTopWidth: 1,
-    borderTopColor: '#EAE6DB',
-    paddingBottom: Platform.OS === 'android' ? 10 : 18,
-    paddingTop: 8,
-    paddingHorizontal: 4,
+    borderTopColor: '#E8E4D9',
+    paddingBottom: Platform.OS === 'android' ? 22 : 30,
+    paddingTop: 10,
+    paddingHorizontal: 6,
     justifyContent: 'space-around',
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
   bottomNavTab: {
     flex: 1,
@@ -10685,10 +11292,45 @@ const customerHomeStyles = StyleSheet.create({
   },
 });
 
-export default App;
-
-try {
-  registerRootComponent(App);
-} catch (e) {
-  // Ignore if already registered
+class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('RootErrorBoundary caught error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#FDFCF4', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>⚡</Text>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111111', marginBottom: 8, textAlign: 'center' }}>
+            Quick Appointments
+          </Text>
+          <Text style={{ fontSize: 13, color: '#4B5563', textAlign: 'center', marginBottom: 20 }}>
+            {this.state.error?.message || 'An unexpected rendering issue occurred.'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => this.setState({ hasError: false, error: null })}
+            style={{ backgroundColor: '#65B32E', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 }}>Reload Application</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
 }
+
+const SafeApp: React.FC = () => (
+  <RootErrorBoundary>
+    <App />
+  </RootErrorBoundary>
+);
+
+export default SafeApp;

@@ -50,7 +50,7 @@ export const CustomersPage: React.FC = () => {
           loadCustomers(true);
         }
       };
-    } catch (e) {}
+    } catch (e) { }
 
     const unsubscribeSync = api.subscribeToSync((event) => {
       if (event === 'customers_updated' || event === 'user_registered' || event === 'customer_registered') {
@@ -156,11 +156,10 @@ export const CustomersPage: React.FC = () => {
                   <td className="px-6 py-4 font-bold text-slate-900">{c._count?.bookings || 0}</td>
                   <td className="px-6 py-4">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        c.user?.isActive
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.user?.isActive
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}
                     >
                       {c.user?.isActive ? 'Active' : 'Blocked'}
                     </span>
@@ -168,11 +167,10 @@ export const CustomersPage: React.FC = () => {
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => handleToggleStatus(c.id, c.user?.isActive)}
-                      className={`text-xs font-semibold px-3 py-1 rounded-lg transition-all ${
-                        c.user?.isActive
-                          ? 'text-rose-600 hover:bg-rose-50'
-                          : 'text-emerald-700 hover:bg-emerald-50'
-                      }`}
+                      className={`text-xs font-semibold px-3 py-1 rounded-lg transition-all ${c.user?.isActive
+                        ? 'text-rose-600 hover:bg-rose-50'
+                        : 'text-emerald-700 hover:bg-emerald-50'
+                        }`}
                     >
                       {c.user?.isActive ? 'Block User' : 'Unblock User'}
                     </button>

@@ -319,6 +319,244 @@ app.delete('/api/customer/addresses/:id', authenticateToken, async (req, res) =>
 });
 
 /* ==========================================================================
+   CUSTOMER WALLET, TRANSACTIONS, COUPONS & FAVORITES ROUTES
+   ========================================================================== */
+
+// In-memory caches for quick customer wallet & favorites
+const customerWallets = new Map<string, { balance: number; transactions: any[] }>();
+const customerFavorites = new Map<string, Set<string>>();
+const providerGalleries = new Map<string, string[]>();
+
+app.get('/api/customer/wallet', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    if (!customerWallets.has(userId)) {
+      customerWallets.set(userId, {
+        balance: 250.0,
+        transactions: [
+          {
+            id: 'tx_welcome',
+            type: 'CREDIT',
+            amount: 250.0,
+            description: 'Welcome Promotional Cash Bonus',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+    }
+    const wallet = customerWallets.get(userId)!;
+    res.json({ success: true, data: wallet });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/customer/wallet/add-funds', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { amount, paymentMethod } = req.body;
+    const addAmt = Number(amount);
+    if (isNaN(addAmt) || addAmt <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid positive amount required' });
+    }
+    if (!customerWallets.has(userId)) {
+      customerWallets.set(userId, { balance: 0, transactions: [] });
+    }
+    const wallet = customerWallets.get(userId)!;
+    wallet.balance += addAmt;
+    const tx = {
+      id: `tx_${Date.now()}`,
+      type: 'CREDIT',
+      amount: addAmt,
+      description: `Added via ${paymentMethod || 'UPI / Card'}`,
+      createdAt: new Date().toISOString(),
+    };
+    wallet.transactions.unshift(tx);
+    res.json({ success: true, data: wallet, transaction: tx });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/customer/transactions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    let customer = await SupabaseDb.selectOne<any>(
+      'customer_profiles',
+      `select=*&user_id=eq.${encodeURIComponent(userId)}`
+    );
+    let bookings: any[] = [];
+    if (customer?.id) {
+      bookings = await SupabaseDb.select<any>(
+        'bookings',
+        `select=*,service:services(*),provider:provider_profiles(*)&customer_id=eq.${encodeURIComponent(customer.id)}&order=created_at.desc`
+      ).catch(() => []);
+    }
+    const txs = (bookings || []).map((b) => ({
+      id: b.id,
+      bookingRef: b.bookingRef,
+      amount: b.totalAmount,
+      serviceName: b.service?.name || 'Service Booking',
+      providerName: b.provider?.businessName || 'Service Specialist',
+      paymentMethod: b.paymentMethod,
+      paymentStatus: b.paymentStatus,
+      date: b.date,
+      time: b.startTime,
+      createdAt: b.createdAt,
+    }));
+    res.json({ success: true, data: txs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/customer/favorites', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const favs = Array.from(customerFavorites.get(userId) || []);
+    res.json({ success: true, data: favs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/customer/favorites/toggle', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { providerId } = req.body;
+    if (!providerId) return res.status(400).json({ success: false, message: 'providerId is required' });
+    if (!customerFavorites.has(userId)) {
+      customerFavorites.set(userId, new Set());
+    }
+    const set = customerFavorites.get(userId)!;
+    let isFavorite = false;
+    if (set.has(providerId)) {
+      set.delete(providerId);
+    } else {
+      set.add(providerId);
+      isFavorite = true;
+    }
+    res.json({ success: true, isFavorite, data: Array.from(set) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/catalog/coupons', async (_req, res) => {
+  try {
+    const coupons = await SupabaseDb.select<any>(
+      'coupons',
+      'select=*&is_active=eq.true'
+    ).catch(() => []);
+    if (!coupons || coupons.length === 0) {
+      return res.json({
+        success: true,
+        data: [
+          { id: 'c1', code: 'QUICK100', discountType: 'FIXED', value: 100, minOrderAmount: 299, description: 'Flat ₹100 off on all bookings above ₹299' },
+          { id: 'c2', code: 'BEAUTY20', discountType: 'PERCENTAGE', value: 20, minOrderAmount: 499, maxDiscountAmount: 200, description: '20% off on Beauty & Salon Services' },
+          { id: 'c3', code: 'WELCOME50', discountType: 'FIXED', value: 50, minOrderAmount: 199, description: 'Flat ₹50 off for new appointments' },
+        ],
+      });
+    }
+    res.json({ success: true, data: coupons });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/coupons/validate', async (req, res) => {
+  try {
+    const { code, orderAmount } = req.body;
+    const amt = Number(orderAmount) || 0;
+    if (!code) return res.status(400).json({ success: false, message: 'Coupon code required' });
+
+    const cleanCode = code.trim().toUpperCase();
+    let coupon: any = await SupabaseDb.selectOne<any>(
+      'coupons',
+      `select=*&code=eq.${encodeURIComponent(cleanCode)}`
+    ).catch(() => null);
+
+    if (!coupon) {
+      if (cleanCode === 'QUICK100') coupon = { id: 'c1', code: 'QUICK100', discountType: 'FIXED', value: 100, minOrderAmount: 299, maxDiscountAmount: 100, isActive: true };
+      else if (cleanCode === 'BEAUTY20') coupon = { id: 'c2', code: 'BEAUTY20', discountType: 'PERCENTAGE', value: 20, minOrderAmount: 499, maxDiscountAmount: 200, isActive: true };
+      else if (cleanCode === 'WELCOME50') coupon = { id: 'c3', code: 'WELCOME50', discountType: 'FIXED', value: 50, minOrderAmount: 199, maxDiscountAmount: 50, isActive: true };
+    }
+
+    if (!coupon || !coupon.isActive) {
+      return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
+    }
+
+    if (amt < (coupon.minOrderAmount || 0)) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum booking amount of ₹${coupon.minOrderAmount} required for this coupon`,
+      });
+    }
+
+    let discount = 0;
+    if (coupon.discountType === 'PERCENTAGE') {
+      discount = (amt * coupon.value) / 100;
+      if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
+        discount = coupon.maxDiscountAmount;
+      }
+    } else {
+      discount = coupon.value;
+    }
+    if (discount > amt) discount = amt;
+
+    res.json({
+      success: true,
+      data: {
+        code: coupon.code,
+        discountAmount: Math.round(discount),
+        finalAmount: Math.max(0, Math.round(amt - discount)),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/providers/:id/gallery', async (req, res) => {
+  try {
+    const providerId = req.params.id;
+    const list = providerGalleries.get(providerId) || [
+      'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&auto=format&fit=crop&q=80',
+    ];
+    res.json({ success: true, data: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/provider/gallery', authenticateToken, async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl) return res.status(400).json({ success: false, message: 'imageUrl required' });
+    const userId = req.user!.userId;
+    const provider = await SupabaseDb.selectOne<any>(
+      'provider_profiles',
+      `select=*&user_id=eq.${encodeURIComponent(userId)}`
+    );
+    const pId = provider?.id || userId;
+    if (!providerGalleries.has(pId)) {
+      providerGalleries.set(pId, [
+        'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&auto=format&fit=crop&q=80',
+      ]);
+    }
+    const gallery = providerGalleries.get(pId)!;
+    gallery.unshift(imageUrl);
+    res.json({ success: true, data: gallery });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ==========================================================================
    PUBLIC CATALOG, BANNERS & CITIES ROUTES
    ========================================================================== */
 
@@ -358,6 +596,46 @@ app.get('/api/catalog/cities', async (_req, res) => {
   try {
     const cities = await SupabaseStorageService.getCities(true);
     res.json({ success: true, data: cities });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/locations/validate-pincode', async (req, res) => {
+  try {
+    const { pincode } = req.body;
+    const cleanPin = String(pincode || '').trim();
+    if (!cleanPin || cleanPin.length < 5) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid postal pincode' });
+    }
+    const cities = await SupabaseStorageService.getCities(true);
+    const matchedCity = cities.find((c: any) => {
+      const pinList: string[] = Array.isArray(c.pincodeList) && c.pincodeList.length > 0
+        ? c.pincodeList
+        : String(c.pincodes || '')
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter(Boolean);
+      return pinList.includes(cleanPin);
+    });
+
+    if (matchedCity) {
+      return res.json({
+        success: true,
+        serviceable: true,
+        city: matchedCity,
+        message: `Pincode ${cleanPin} is serviceable in ${matchedCity.name}`,
+      });
+    }
+
+    const availableNames = cities.map((c: any) => c.name).join(', ');
+    return res.json({
+      success: true,
+      serviceable: false,
+      city: null,
+      message: `Pincode ${cleanPin} is not currently serviceable. We are active in: ${availableNames || 'Warangal, Hyderabad'}`,
+      availableCities: cities,
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -481,9 +759,9 @@ app.get('/api/admin/cities', authenticateToken, requireRole(ADMIN_CATALOG_ROLES)
 
 app.post('/api/admin/cities', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
   try {
-    const { name, state, is_active } = req.body;
+    const { name, state, is_active, pincodes } = req.body;
     if (!name || !state) return res.status(400).json({ success: false, message: 'City name and state are required' });
-    const created = await SupabaseStorageService.addCity({ name, state, is_active });
+    const created = await SupabaseStorageService.addCity({ name, state, is_active, pincodes });
     res.status(201).json({ success: true, data: created });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -559,8 +837,18 @@ app.get('/api/providers', async (req, res) => {
 
     if (categoryId && String(categoryId).trim()) {
       const targetCat = String(categoryId).trim();
+      const needle = targetCat.toLowerCase();
       mapped = mapped.filter((p: any) =>
-        p.customServices?.some((r: any) => r.service?.category_id === targetCat)
+        p.category_id === targetCat ||
+        p.categoryId === targetCat ||
+        p.category?.slug?.toLowerCase() === needle ||
+        p.category?.name?.toLowerCase().includes(needle) ||
+        p.customServices?.some((r: any) =>
+          r.service?.category_id === targetCat ||
+          r.service?.category?.id === targetCat ||
+          r.service?.category?.slug?.toLowerCase() === needle ||
+          r.service?.category?.name?.toLowerCase().includes(needle)
+        )
       );
     }
 
@@ -884,6 +1172,184 @@ app.post('/api/provider/onboard', authenticateToken, async (req, res) => {
     });
   } catch (err: any) {
     res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+/* ==========================================================================
+   PROVIDER CUSTOM SERVICES & MENU MANAGEMENT (Swiggy Partner Style)
+   ========================================================================== */
+
+app.get('/api/provider/services', authenticateToken, async (req, res) => {
+  try {
+    const provider = await SupabaseDb.selectOne<any>(
+      'provider_profiles',
+      `select=*&user_id=eq.${encodeURIComponent(req.user!.userId)}`
+    );
+    if (!provider) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const rates = await SupabaseDb.select<any>(
+      'provider_service_rates',
+      `select=*&provider_id=eq.${encodeURIComponent(provider.id)}&order=created_at.desc`
+    );
+    if (!rates || rates.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const servIds = Array.from(new Set(rates.map((r: any) => r.service_id).filter(Boolean)));
+    const services = servIds.length > 0
+      ? await SupabaseDb.select<any>('services', `select=*&id=in.(${servIds.join(',')})`)
+      : [];
+    const catIds = Array.from(new Set(services.map((s: any) => s.category_id).filter(Boolean)));
+    const categories = catIds.length > 0
+      ? await SupabaseDb.select<any>('categories', `select=*&id=in.(${catIds.join(',')})`)
+      : [];
+
+    const servMap = new Map(services.map((s: any) => [s.id, s]));
+    const catMap = new Map(categories.map((c: any) => [c.id, c]));
+
+    const mapped = rates.map((r: any) => {
+      const s = servMap.get(r.service_id);
+      const cat = s ? catMap.get(s.category_id) : null;
+      return {
+        id: r.id,
+        rateId: r.id,
+        serviceId: r.service_id,
+        name: s?.name || 'Custom Service',
+        description: s?.description || '',
+        categoryName: cat?.name || 'General',
+        categoryId: s?.category_id || '',
+        customPrice: r.custom_price ?? s?.base_price ?? 499,
+        basePrice: s?.base_price ?? 499,
+        customDuration: r.custom_duration ?? s?.duration_minutes ?? 60,
+        durationMinutes: s?.duration_minutes ?? 60,
+        imageUrl: s?.image_url || null,
+        approvalStatus: r.approval_status || 'PENDING',
+        isActive: Boolean(r.is_active),
+        createdAt: r.created_at || new Date().toISOString(),
+      };
+    });
+
+    res.json({ success: true, data: mapped });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/provider/services', authenticateToken, async (req, res) => {
+  try {
+    const provider = await SupabaseDb.selectOne<any>(
+      'provider_profiles',
+      `select=*&user_id=eq.${encodeURIComponent(req.user!.userId)}`
+    );
+    if (!provider) {
+      return res.status(404).json({ success: false, message: 'Provider profile not found. Please register as provider first.' });
+    }
+
+    const { categoryId, serviceId, name, description, customPrice, price, customDuration, duration, imageUrl } = req.body;
+    const finalPrice = Number(customPrice ?? price);
+    const finalDuration = Number(customDuration ?? duration ?? 45);
+
+    if (isNaN(finalPrice) || finalPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid price (₹)' });
+    }
+
+    let targetServiceId = serviceId;
+
+    // If no serviceId, create a custom service in catalog under this category
+    if (!targetServiceId) {
+      if (!categoryId || !name || !name.trim()) {
+        return res.status(400).json({ success: false, message: 'Service name and category are required' });
+      }
+      const createdService = await SupabaseStorageService.createService({
+        name: name.trim(),
+        category_id: categoryId,
+        description: description?.trim() || `${name.trim()} offered by ${provider.business_name || 'Specialist'}`,
+        base_price: finalPrice,
+        duration_minutes: finalDuration,
+        image_url: imageUrl || null,
+      });
+      if (!createdService) {
+        return res.status(500).json({ success: false, message: 'Failed to create service entry' });
+      }
+      targetServiceId = createdService.id;
+    }
+
+    // Insert or update ProviderServiceRate in PENDING state (Swiggy partner approval model)
+    const existingRate = await SupabaseDb.selectOne<any>(
+      'provider_service_rates',
+      `select=*&provider_id=eq.${encodeURIComponent(provider.id)}&service_id=eq.${encodeURIComponent(targetServiceId)}`
+    );
+
+    let rateRow: any;
+    if (existingRate) {
+      rateRow = await SupabaseDb.updateOne<any>('provider_service_rates', existingRate.id, {
+        custom_price: finalPrice,
+        custom_duration: finalDuration,
+        approval_status: 'PENDING',
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      rateRow = await SupabaseDb.insertOne<any>('provider_service_rates', {
+        provider_id: provider.id,
+        service_id: targetServiceId,
+        custom_price: finalPrice,
+        custom_duration: finalDuration,
+        approval_status: 'PENDING',
+        is_active: false,
+      });
+    }
+
+    // Notify provider
+    await SupabaseDb.insertOne('notifications', {
+      user_id: req.user!.userId,
+      type: 'SYSTEM_ALERT',
+      title: 'Service Submitted for Approval',
+      message: `Your service "${name || 'Custom Service'}" (₹${finalPrice}) was submitted to Admin for review. It will become live once approved.`,
+      data: { rateId: rateRow.id, status: 'PENDING' },
+    }).catch(() => {});
+
+    // Notify Admin & broadcast realtime sync
+    SupabaseDb.broadcastSync('rates_updated', { providerId: provider.id, rateId: rateRow.id });
+    SupabaseDb.broadcastSync('catalog_updated', { entity: 'rate_card', id: rateRow.id });
+
+    res.status(201).json({
+      success: true,
+      message: 'Service submitted for Admin approval successfully',
+      data: {
+        ...rateRow,
+        approvalStatus: 'PENDING',
+        customPrice: finalPrice,
+        customDuration: finalDuration,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/provider/services/:id', authenticateToken, async (req, res) => {
+  try {
+    const provider = await SupabaseDb.selectOne<any>(
+      'provider_profiles',
+      `select=*&user_id=eq.${encodeURIComponent(req.user!.userId)}`
+    );
+    if (!provider) {
+      return res.status(404).json({ success: false, message: 'Provider profile not found' });
+    }
+
+    const removed = await SupabaseDb.remove(
+      'provider_service_rates',
+      `id=eq.${encodeURIComponent(req.params.id)}&provider_id=eq.${encodeURIComponent(provider.id)}`
+    );
+    SupabaseDb.broadcastSync('rates_updated', { providerId: provider.id, rateId: req.params.id });
+    SupabaseDb.broadcastSync('catalog_updated', { entity: 'rate_card', id: req.params.id });
+
+    res.json({ success: true, message: 'Service removed from menu', data: removed });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

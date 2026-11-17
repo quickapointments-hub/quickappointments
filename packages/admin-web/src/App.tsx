@@ -190,7 +190,12 @@ export const App: React.FC = () => {
             />
           )}
           {currentTab === 'verification' && <VerificationPage />}
-          {currentTab === 'catalog' && <CatalogPage />}
+          {currentTab === 'catalog' && (
+            <CatalogPage
+              onNavigateToRateCards={() => setCurrentTab('rate_cards')}
+              onNavigateToServices={() => setCurrentTab('services')}
+            />
+          )}
           {currentTab === 'services' && <ServicesPage />}
           {currentTab === 'bookings' && <BookingsPage />}
           {currentTab === 'customers' && <CustomersPage />}

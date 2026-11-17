@@ -47,6 +47,8 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
         const saved = localStorage.getItem('qa_selected_city');
         if (saved && res.data.some((c: any) => c.name.toLowerCase() === saved.toLowerCase())) {
           setSelectedCity(saved);
+        } else {
+          setSelectedCity(res.data[0].name);
         }
       }
     } catch (err) {
@@ -63,20 +65,64 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
 
   const handleUseCurrentLocation = () => {
     setDetectingLocation(true);
-    setTimeout(() => {
-      setSelectedCity('Hyderabad');
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (_pos) => {
+          const fallback = serviceCities[0]?.name || 'Hyderabad';
+          setSelectedCity(fallback);
+          try {
+            localStorage.setItem('qa_selected_city', fallback);
+          } catch (e) {}
+          setDetectingLocation(false);
+        },
+        (_err) => {
+          const fallback = serviceCities[0]?.name || 'Hyderabad';
+          setSelectedCity(fallback);
+          try {
+            localStorage.setItem('qa_selected_city', fallback);
+          } catch (e) {}
+          setDetectingLocation(false);
+        },
+        { timeout: 4000 }
+      );
+    } else {
+      const fallback = serviceCities[0]?.name || 'Hyderabad';
+      setSelectedCity(fallback);
       try {
-        localStorage.setItem('qa_selected_city', 'Hyderabad');
+        localStorage.setItem('qa_selected_city', fallback);
       } catch (e) {}
       setDetectingLocation(false);
-    }, 600);
+    }
   };
 
-  const filteredCities = serviceCities.filter(
-    (city) =>
+  const isPincodeSearch = /^\d{5,6}$/.test(searchQuery.trim());
+  const matchedPincodeCity = isPincodeSearch
+    ? serviceCities.find((c) => {
+        const list = c.pincodeList || (c.pincodes ? c.pincodes.split(',').map((p: string) => p.trim()) : []);
+        return list.includes(searchQuery.trim());
+      })
+    : null;
+
+  useEffect(() => {
+    if (matchedPincodeCity) {
+      setSelectedCity(matchedPincodeCity.name);
+      try {
+        localStorage.setItem('qa_selected_city', matchedPincodeCity.name);
+      } catch (e) {}
+    }
+  }, [matchedPincodeCity]);
+
+  const filteredCities = serviceCities.filter((city) => {
+    if (isPincodeSearch) {
+      const list = city.pincodeList || (city.pincodes ? city.pincodes.split(',').map((p: string) => p.trim()) : []);
+      return list.some((p: string) => p.includes(searchQuery.trim())) || city.name.toLowerCase().includes(searchQuery.toLowerCase());
+    }
+    return (
       city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (city.state && city.state.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+      (city.state && city.state.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (city.pincodes && city.pincodes.includes(searchQuery.trim()))
+    );
+  });
 
   return (
     <div className="relative min-h-full h-full flex flex-col justify-between p-6 bg-[#FDFCF4] text-[#111111] overflow-y-auto select-none">
@@ -164,18 +210,42 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
           </p>
         </div>
 
-        {/* Search city or state input */}
-        <div className="mb-3.5">
+        {/* Search city or postal pincode input */}
+        <div className="mb-3.5 space-y-2">
           <div className="w-full bg-white rounded-2xl border border-[#D1D5DB] focus-within:border-[#16A34A] flex items-center px-4 py-3 shadow-xs transition-colors">
             <Search className="w-4 h-4 text-[#9CA3AF] shrink-0 mr-3" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search city or state"
+              placeholder="Search city, state or 6-digit pincode (e.g. 500081)"
               className="w-full text-xs sm:text-sm font-medium text-[#111111] placeholder-[#9CA3AF] focus:outline-none bg-transparent"
             />
           </div>
+
+          {/* Real-time Pincode Validation Feedback */}
+          {isPincodeSearch && matchedPincodeCity && (
+            <div className="p-3 bg-[#EFF8E7] border border-[#16A34A]/30 rounded-2xl text-xs text-[#16A34A] font-bold flex items-center gap-2 animate-fadeIn">
+              <Check className="w-4 h-4 stroke-[3] shrink-0" />
+              <span>
+                Pincode {searchQuery.trim()} is serviceable! Location selected as{' '}
+                <strong>{matchedPincodeCity.name}</strong>.
+              </span>
+            </div>
+          )}
+
+          {isPincodeSearch && !matchedPincodeCity && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 font-semibold space-y-1 animate-fadeIn">
+              <p className="font-bold flex items-center gap-1.5">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Pincode {searchQuery.trim()} is not currently serviceable</span>
+              </p>
+              <p className="text-[11px] text-amber-700">
+                Admin has enabled services in:{' '}
+                {serviceCities.map((c) => c.name).join(', ') || 'Warangal, Hyderabad'}. Please select one of these locations below.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Use my current location card */}
@@ -233,6 +303,11 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
                     {city.state && (
                       <span className="text-[10px] sm:text-xs text-[#6B7280] block truncate mt-0.5 font-medium">
                         {city.state}
+                      </span>
+                    )}
+                    {city.pincodes && (
+                      <span className="text-[9px] text-[#16A34A] block truncate mt-0.5 font-mono font-semibold">
+                        {city.pincodes.slice(0, 26)}...
                       </span>
                     )}
                   </div>

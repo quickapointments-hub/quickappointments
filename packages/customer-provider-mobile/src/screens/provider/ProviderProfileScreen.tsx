@@ -13,16 +13,19 @@ import {
   Building2,
   Users,
   Globe,
+  Layers,
 } from 'lucide-react';
 
 export const ProviderProfileScreen: React.FC<{
   onOpenKyc?: () => void;
+  onOpenServices?: () => void;
   onOpenReviews?: () => void;
   onOpenBranches?: () => void;
   onOpenStaff?: () => void;
   onOpenSupport?: () => void;
 }> = ({
   onOpenKyc,
+  onOpenServices,
   onOpenReviews,
   onOpenBranches,
   onOpenStaff,
@@ -32,7 +35,9 @@ export const ProviderProfileScreen: React.FC<{
   const { currentLanguage, languages, t } = useLanguage();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-  const activeLangObj = languages.find((l) => l.code === currentLanguage) || languages[0];
+  const activeLangObj =
+    languages.find((l) => l.code === currentLanguage) ||
+    languages[0] || { code: 'en', name: 'English', nativeName: 'English' };
 
   return (
     <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FDFCF4] text-[#111111] min-h-full">
@@ -91,6 +96,20 @@ export const ProviderProfileScreen: React.FC<{
 
         {/* Menu Options */}
         <div className="bg-white rounded-3xl border border-[#E8E4D9] divide-y divide-[#F2EFE8] overflow-hidden shadow-sm">
+          <div
+            onClick={onOpenServices}
+            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          >
+            <div className="flex items-center gap-3 text-[#111111] font-semibold">
+              <Layers className="w-4 h-4 text-[#65B32E]" />
+              <div>
+                <span className="block font-bold">My Services & Menu (Swiggy Partner)</span>
+                <span className="text-[10px] text-[#4B5563] font-normal">Add custom services, costs & view Admin approvals</span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+          </div>
+
           <div
             onClick={onOpenKyc}
             className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"

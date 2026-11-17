@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { mobileApi } from '../api';
-import { AlertCircle, Star, ShieldCheck, ArrowRight, X, RefreshCw } from 'lucide-react';
+import { AlertCircle, ShieldCheck, ArrowRight, X, RefreshCw } from 'lucide-react';
 
 interface AlternativeProvidersModalProps {
   booking: any;
@@ -81,10 +81,8 @@ export const AlternativeProvidersModal: React.FC<AlternativeProvidersModalProps>
                       </h4>
                       <ShieldCheck className="w-3.5 h-3.5 text-[#65B32E]" />
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-bold text-[#111111] mt-0.5">
-                      <Star className="w-3 h-3 fill-[#65B32E] text-[#65B32E]" />
-                      <span>{p.ratingAvg}</span>
-                      <span className="text-[#6B7280] font-normal">({p.ratingCount})</span>
+                    <div className="flex items-center gap-1 text-[11px] text-[#4B5563] mt-0.5">
+                      <span>{p.categoryName || 'Verified Specialist'}</span>
                     </div>
                   </div>
                 </div>

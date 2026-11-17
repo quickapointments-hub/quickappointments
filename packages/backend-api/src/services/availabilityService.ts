@@ -105,7 +105,7 @@ export class AvailabilityService {
     const prevPromise = slotLockMutex.get(lockKey) || Promise.resolve();
 
     const currentTask = prevPromise
-      .catch(() => {})
+      .catch(() => { })
       .then(async () => {
         const provider = await SupabaseDb.selectOne<any>(
           'provider_profiles',

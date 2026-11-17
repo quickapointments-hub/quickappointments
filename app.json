@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Quick Appointments",
+    "slug": "quick-appointments",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FDFCF4"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quickappointments.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Quick Appointments requires your location to discover nearby specialists and providers.",
+        "NSCameraUsageDescription": "Quick Appointments requires camera access to upload identity proof and KYC documents.",
+        "NSPhotoLibraryUsageDescription": "Quick Appointments requires photo library access to upload documents."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FDFCF4"
+      },
+      "package": "com.quickappointments.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "scheme": "quickappointments",
+    "web": {
+      "favicon": "./public/logo.png",
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ugxgtgvykauyydxoqouz"
+      }
+    }
+  }
+}

@@ -452,10 +452,19 @@ class ApiClient {
     return this.request('/admin/cities');
   }
 
-  async addServiceCity(city: { name: string; state: string; is_active?: boolean }) {
+  async addServiceCity(city: { name: string; state: string; is_active?: boolean; pincodes?: string }) {
     const res = await this.request('/admin/cities', {
       method: 'POST',
       body: JSON.stringify(city),
+    });
+    this.broadcastSync('cities_updated', {});
+    return res;
+  }
+
+  async updateServiceCity(cityId: string, updates: { name?: string; state?: string; is_active?: boolean; pincodes?: string }) {
+    const res = await this.request(`/admin/cities/${cityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
     });
     this.broadcastSync('cities_updated', {});
     return res;

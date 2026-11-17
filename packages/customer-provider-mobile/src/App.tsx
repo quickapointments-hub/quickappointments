@@ -1,4 +1,6 @@
-import React, { useState, useCallback, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
+import { mobileApi } from './api';
+import { supabase } from './supabase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { LanguageModal } from './components/LanguageModal';
@@ -25,18 +27,38 @@ import {
   ProviderKycUploadScreen,
   ProviderKycStatusScreen,
 } from './screens';
+import { ProviderServicesScreen } from './screens/provider/ProviderServicesScreen';
 import {
-  Compass,
-  CalendarCheck,
-  User,
-  LayoutDashboard,
-  Clock,
-  Coins,
   Smartphone,
   Maximize2,
   Repeat,
   Globe,
 } from 'lucide-react';
+import {
+  FaHome,
+  FaSearch,
+  FaCalendarCheck,
+  FaHeart,
+  FaUser,
+  FaTachometerAlt,
+  FaClock,
+  FaWallet,
+  FaCoins,
+  FaTicketAlt,
+  FaImages,
+} from './components/FontAwesomeIcons';
+import { WalletModal } from './components/WalletModal';
+import { TransactionHistoryModal } from './components/TransactionHistoryModal';
+import { OffersCouponsModal } from './components/OffersCouponsModal';
+import { ServiceDetailsModal } from './components/ServiceDetailsModal';
+import { BookingInvoiceModal } from './components/BookingInvoiceModal';
+import { RefundStatusModal } from './components/RefundStatusModal';
+import { FilterSortModal } from './components/FilterSortModal';
+import { ProviderGalleryModal } from './components/ProviderGalleryModal';
+import { FavoritesDrawer } from './components/FavoritesDrawer';
+import { LocationPermissionModal } from './components/LocationPermissionModal';
+import { FAQsModal } from './components/FAQsModal';
+import { ProviderAddServiceModal } from './components/ProviderAddServiceModal';
 
 const MobileNavigationContent: React.FC = () => {
   const { user, activeRole, isAuthenticated, switchRole } = useAuth();
@@ -59,13 +81,113 @@ const MobileNavigationContent: React.FC = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
 
+  // Refinement & Feature Modal States (Addressing UI-Only & Partial items)
+  const [showWallet, setShowWallet] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
+  const [showOffers, setShowOffers] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [showFaqs, setShowFaqs] = useState(false);
+  const [showLocationPermission, setShowLocationPermission] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceBooking, setInvoiceBooking] = useState<any>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundBooking, setRefundBooking] = useState<any>(null);
+  const [showServiceDetailModal, setShowServiceDetailModal] = useState(false);
+  const [detailService, setDetailService] = useState<any>(null);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [galleryProviderId, setGalleryProviderId] = useState<string>('fp1');
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+
+  // Filter state for services
+  const [serviceFilters, setServiceFilters] = useState<{
+    sort: 'popular' | 'price_low' | 'price_high';
+    priceRange: 'all' | 'under_500' | '500_1000' | 'above_1000';
+    verifiedOnly: boolean;
+  }>({ sort: 'popular', priceRange: 'all', verifiedOnly: false });
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Active City State (Synced across Customer Home, Discovery, Categories and Search)
+  const [currentCity, setCurrentCity] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('qa_selected_city');
+      if (saved) return saved;
+    } catch {}
+    return user?.customerProfile?.city || 'Hyderabad';
+  });
+
+  const handleCityChange = useCallback((cityName: string) => {
+    if (!cityName) return;
+    setCurrentCity(cityName);
+    try {
+      localStorage.setItem('qa_selected_city', cityName);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    mobileApi.getActiveCities().then((res) => {
+      if (!active || !Array.isArray(res?.data) || res.data.length === 0) return;
+      const activeNames = res.data.map((c: any) => c.name);
+      const saved = localStorage.getItem('qa_selected_city');
+
+      if (!saved || !activeNames.includes(saved)) {
+        const fallback = user?.customerProfile?.city && activeNames.includes(user.customerProfile.city)
+          ? user.customerProfile.city
+          : activeNames[0];
+        handleCityChange(fallback);
+      }
+    }).catch(() => {});
+
+    // Listen to realtime city updates when admin enables/disables cities in Admin Panel
+    const channel = supabase
+      .channel('app-global-cities-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cities' }, () => {
+        mobileApi.getActiveCities().then((res) => {
+          if (!Array.isArray(res?.data) || res.data.length === 0) return;
+          const activeNames = res.data.map((c: any) => c.name);
+          setCurrentCity((prev) => {
+            const next = activeNames.includes(prev) ? prev : activeNames[0];
+            try {
+              localStorage.setItem('qa_selected_city', next);
+            } catch {}
+            return next;
+          });
+        }).catch(() => {});
+      })
+      .subscribe();
+
+    const unsub = mobileApi.subscribeToSync((ev) => {
+      if (ev === 'cities_updated') {
+        mobileApi.getActiveCities().then((res) => {
+          if (!Array.isArray(res?.data) || res.data.length === 0) return;
+          const activeNames = res.data.map((c: any) => c.name);
+          setCurrentCity((prev) => {
+            const next = activeNames.includes(prev) ? prev : activeNames[0];
+            try {
+              localStorage.setItem('qa_selected_city', next);
+            } catch {}
+            return next;
+          });
+        }).catch(() => {});
+      }
+    });
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+      unsub();
+    };
+  }, [user?.customerProfile?.city, handleCityChange]);
+
   // Provider sub-screen navigation states
   const [providerSubScreen, setProviderSubScreen] = useState<
-    'none' | 'reviews' | 'branches' | 'staff' | 'kyc-step1' | 'kyc-step2' | 'kyc-status'
+    'none' | 'services' | 'reviews' | 'branches' | 'staff' | 'kyc-step1' | 'kyc-step2' | 'kyc-status'
   >('none');
   const [onboardingBusinessData, setOnboardingBusinessData] = useState<any>(null);
 
-  const activeLangObj = languages.find((l) => l.code === currentLanguage) || languages[0];
+  const activeLangObj =
+    languages.find((l) => l.code === currentLanguage) ||
+    languages[0] || { code: 'en', name: 'English', nativeName: 'English' };
 
   const handleFinishSplash = useCallback(() => {
     setShowSplash(false);
@@ -89,7 +211,10 @@ const MobileNavigationContent: React.FC = () => {
 
           {onboardingStage === 'location' && (
             <SelectLocationScreen
-              onContinue={(_city) => setOnboardingStage('auth')}
+              onContinue={(chosenCity) => {
+                handleCityChange(chosenCity);
+                setOnboardingStage('auth');
+              }}
               onBack={() => setOnboardingStage('carousel')}
             />
           )}
@@ -187,12 +312,19 @@ const MobileNavigationContent: React.FC = () => {
               {selectedCategory ? (
                 <CategoryProvidersScreen
                   category={selectedCategory}
-                  city={user?.customerProfile?.city}
+                  city={currentCity}
                   onBack={() => setSelectedCategory(null)}
+                  onOpenSearch={() => {
+                    setSelectedCategory(null);
+                    setActiveTab('search');
+                  }}
+                  onOpenLocationModal={() => setShowLocationPermission(true)}
                 />
               ) : showAllCategories ? (
                 <AllCategoriesScreen
-                  selectedCity={user?.customerProfile?.city}
+                  selectedCity={currentCity}
+                  onChangeCity={handleCityChange}
+                  onOpenLocationModal={() => setShowLocationPermission(true)}
                   onSelectCategory={(cat) => {
                     setShowAllCategories(false);
                     setSelectedCategory(cat);
@@ -205,15 +337,66 @@ const MobileNavigationContent: React.FC = () => {
                 <>
                   {activeTab === 'home' && (
                     <CustomerHomeScreen
+                      selectedCity={currentCity}
+                      onChangeCity={handleCityChange}
+                      onOpenLocationModal={() => setShowLocationPermission(true)}
                       onSelectCategory={(cat) => setSelectedCategory(cat)}
                       onNavigateToBookings={() => setActiveTab('bookings')}
-                      onOpenSearch={() => setShowSearch(true)}
+                      onOpenSearch={() => setActiveTab('search')}
                       onViewAllCategories={() => setShowAllCategories(true)}
                     />
                   )}
-                  {activeTab === 'bookings' && <CustomerBookingsScreen />}
+                  {activeTab === 'search' && (
+                    <SearchScreen
+                      selectedCity={currentCity}
+                      onChangeCity={handleCityChange}
+                      onOpenLocationModal={() => setShowLocationPermission(true)}
+                      onSelectCategory={(cat) => setSelectedCategory(cat)}
+                      onViewAllCategories={() => setShowAllCategories(true)}
+                      onClose={() => setActiveTab('home')}
+                    />
+                  )}
+                  {activeTab === 'bookings' && (
+                    <CustomerBookingsScreen
+                      onViewInvoice={(b) => {
+                        setInvoiceBooking(b);
+                        setShowInvoiceModal(true);
+                      }}
+                      onTrackRefund={(b) => {
+                        setRefundBooking(b);
+                        setShowRefundModal(true);
+                      }}
+                    />
+                  )}
+                  {activeTab === 'favorites' && (
+                    <div className="p-4 pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-black text-[#111111]">Saved Favourites</h2>
+                        <button
+                          onClick={() => setShowFavorites(true)}
+                          className="px-3 py-1 bg-[#EFF8E7] border border-[#65B32E] text-[#1B3808] font-bold text-xs rounded-lg"
+                        >
+                          Manage Favourites
+                        </button>
+                      </div>
+                      <p className="text-xs text-[#4B5563] mb-4">Your saved specialists and salon partners for instant rebooking.</p>
+                      <button
+                        onClick={() => setShowFavorites(true)}
+                        className="w-full py-4 bg-white border border-[#E8E4D9] rounded-2xl shadow-xs text-xs font-bold text-[#65B32E] flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <FaHeart size={14} color="#65B32E" />
+                        <span>View All Favourite Specialists</span>
+                      </button>
+                    </div>
+                  )}
                   {activeTab === 'profile' && (
-                    <CustomerProfileScreen onOpenSupport={() => setShowSupport(true)} />
+                    <CustomerProfileScreen
+                      onOpenSupport={() => setShowSupport(true)}
+                      onOpenWallet={() => setShowWallet(true)}
+                      onOpenTransactions={() => setShowTransactions(true)}
+                      onOpenOffers={() => setShowOffers(true)}
+                      onOpenFaqs={() => setShowFaqs(true)}
+                    />
                   )}
                 </>
               )}
@@ -223,6 +406,8 @@ const MobileNavigationContent: React.FC = () => {
               {/* Provider Sub-screens */}
               {showSupport ? (
                 <CustomerSupportScreen onBack={() => setShowSupport(false)} />
+              ) : providerSubScreen === 'services' ? (
+                <ProviderServicesScreen onBack={() => setProviderSubScreen('none')} />
               ) : providerSubScreen === 'reviews' ? (
                 <ProviderReviewsScreen onBack={() => setProviderSubScreen('none')} />
               ) : providerSubScreen === 'branches' ? (
@@ -256,12 +441,14 @@ const MobileNavigationContent: React.FC = () => {
                     <ProviderDashboardScreen
                       onNavigateToSchedule={() => setActiveTab('schedule')}
                       onNavigateToEarnings={() => setActiveTab('earnings')}
+                      onNavigateToServices={() => setProviderSubScreen('services')}
                     />
                   )}
                   {activeTab === 'schedule' && <ProviderAvailabilityScreen />}
                   {activeTab === 'earnings' && <ProviderEarningsScreen />}
                   {activeTab === 'profile' && (
                     <ProviderProfileScreen
+                      onOpenServices={() => setProviderSubScreen('services')}
                       onOpenReviews={() => setProviderSubScreen('reviews')}
                       onOpenBranches={() => setProviderSubScreen('branches')}
                       onOpenStaff={() => setProviderSubScreen('staff')}
@@ -278,7 +465,8 @@ const MobileNavigationContent: React.FC = () => {
         {/* Global Search Modal Overlay */}
         {showSearch && (
           <SearchScreen
-            selectedCity={user?.customerProfile?.city}
+            selectedCity={currentCity}
+            onChangeCity={handleCityChange}
             onSelectCategory={(cat) => setSelectedCategory(cat)}
             onViewAllCategories={() => setShowAllCategories(true)}
             onClose={() => setShowSearch(false)}
@@ -288,122 +476,279 @@ const MobileNavigationContent: React.FC = () => {
         {/* Global Language Switcher Modal */}
         <LanguageModal isOpen={showLangModal} onClose={() => setShowLangModal(false)} />
 
-        {/* Mobile Bottom Navigation Bar (Official Cream & Brand Green Active Indicator, Safe Area Resilient) */}
-        <nav className="h-16 bottom-nav-safe border-t border-[#E8E4D9] bg-[#FDFCF4] px-6 flex items-center justify-around shrink-0 select-none shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
+        {/* Refinement & Polish Modals (Wallet, Transactions, Offers, Invoices, FAQs, Gallery) */}
+        <WalletModal isOpen={showWallet} onClose={() => setShowWallet(false)} />
+        <TransactionHistoryModal
+          isOpen={showTransactions}
+          onClose={() => setShowTransactions(false)}
+          onViewInvoice={(tx) => {
+            setInvoiceBooking(tx);
+            setShowInvoiceModal(true);
+          }}
+        />
+        <OffersCouponsModal isOpen={showOffers} onClose={() => setShowOffers(false)} />
+        <FavoritesDrawer
+          isOpen={showFavorites}
+          onClose={() => setShowFavorites(false)}
+          onSelectProvider={(p) => {
+            setShowFavorites(false);
+            setSelectedCategory({ id: p.categoryId || 'beauty', name: p.categoryName || 'Beauty & Salon' });
+          }}
+        />
+        <FAQsModal isOpen={showFaqs} onClose={() => setShowFaqs(false)} />
+        <LocationPermissionModal
+          isOpen={showLocationPermission}
+          onClose={() => setShowLocationPermission(false)}
+          onLocationSelected={handleCityChange}
+        />
+        <BookingInvoiceModal
+          isOpen={showInvoiceModal}
+          booking={invoiceBooking}
+          onClose={() => setShowInvoiceModal(false)}
+        />
+        <RefundStatusModal
+          isOpen={showRefundModal}
+          booking={refundBooking}
+          onClose={() => setShowRefundModal(false)}
+        />
+        <ServiceDetailsModal
+          isOpen={showServiceDetailModal}
+          service={detailService}
+          onClose={() => setShowServiceDetailModal(false)}
+          onBookNow={(_srv) => {}}
+        />
+        <ProviderGalleryModal
+          isOpen={showGalleryModal}
+          providerId={galleryProviderId}
+          isProviderOwner={activeRole === 'PROVIDER'}
+          onClose={() => setShowGalleryModal(false)}
+        />
+        <FilterSortModal
+          isOpen={showFilterModal}
+          onClose={() => setShowFilterModal(false)}
+          currentSort={serviceFilters.sort}
+          currentPriceRange={serviceFilters.priceRange}
+          verifiedOnly={serviceFilters.verifiedOnly}
+          onApply={(f) => setServiceFilters(f)}
+        />
+        <ProviderAddServiceModal
+          isOpen={showAddServiceModal}
+          onClose={() => setShowAddServiceModal(false)}
+        />
+
+        {/* Mobile Bottom Navigation Bar (Official Cream, FontAwesome Icons & Safe Area Resilient) */}
+        <nav
+          className="border-t border-[#E8E4D9] bg-[#FDFCF4] px-4 flex items-center justify-around shrink-0 select-none shadow-[0_-2px_12px_rgba(0,0,0,0.03)]"
+          style={{
+            paddingTop: '8px',
+            paddingBottom: 'max(14px, env(safe-area-inset-bottom, 16px))',
+            minHeight: '68px',
+          }}
+        >
           {activeRole === 'CUSTOMER' ? (
             <>
+              {/* 1. Home */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
                   setShowSupport(false);
                   setActiveTab('home');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'home' && !selectedCategory && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'home' && !showAllCategories && !showSupport
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <Compass className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_explore')}</span>
+                <FaHome size={19} color={activeTab === 'home' && !showAllCategories && !showSupport ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'home' && !showAllCategories && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_home') || 'Home'}
+                </span>
+                {activeTab === 'home' && !showAllCategories && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
 
+              {/* 2. Search */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
+                  setShowAllCategories(false);
+                  setShowSupport(false);
+                  setActiveTab('search');
+                }}
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'search' || showAllCategories
+                    ? 'text-[#65B32E]'
+                    : 'text-[#6B7280] hover:text-[#111111]'
+                }`}
+              >
+                <FaSearch size={18} color={activeTab === 'search' || showAllCategories ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'search' || showAllCategories ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_search') || 'Search'}
+                </span>
+                {(activeTab === 'search' || showAllCategories) && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
+              </button>
+
+              {/* 3. Appointments */}
+              <button
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowAllCategories(false);
                   setShowSupport(false);
                   setActiveTab('bookings');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'bookings' && !selectedCategory && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'bookings'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <CalendarCheck className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_bookings')}</span>
+                <FaCalendarCheck size={18} color={activeTab === 'bookings' ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'bookings' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_bookings') || 'Appointments'}
+                </span>
+                {activeTab === 'bookings' && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
 
+              {/* 4. Favourites */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
+                  setShowAllCategories(false);
                   setShowSupport(false);
-                  setActiveTab('profile');
+                  setActiveTab('favorites');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'profile' && !selectedCategory && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'favorites'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <User className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_profile')}</span>
+                <FaHeart size={18} color={activeTab === 'favorites' ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'favorites' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  Favourites
+                </span>
+                {activeTab === 'favorites' && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
+              </button>
+
+              {/* 5. Profile */}
+              <button
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowAllCategories(false);
+                  setShowSupport(false);
+                  setActiveTab('profile');
+                }}
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                  activeTab === 'profile'
+                    ? 'text-[#65B32E]'
+                    : 'text-[#6B7280] hover:text-[#111111]'
+                }`}
+              >
+                <FaUser size={18} color={activeTab === 'profile' ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'profile' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_profile') || 'Profile'}
+                </span>
+                {activeTab === 'profile' && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
             </>
           ) : (
             <>
+              {/* Provider 1. Dashboard */}
               <button
                 onClick={() => {
                   setProviderSubScreen('none');
                   setShowSupport(false);
                   setActiveTab('home');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
                   activeTab === 'home' && providerSubScreen === 'none' && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <LayoutDashboard className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_dashboard')}</span>
+                <FaTachometerAlt size={19} color={activeTab === 'home' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'home' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_dashboard') || 'Dashboard'}
+                </span>
+                {activeTab === 'home' && providerSubScreen === 'none' && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
 
+              {/* Provider 2. Schedule / Availability */}
               <button
                 onClick={() => {
                   setProviderSubScreen('none');
                   setShowSupport(false);
                   setActiveTab('schedule');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
                   activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <Clock className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_availability')}</span>
+                <FaClock size={19} color={activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_availability') || 'Schedule'}
+                </span>
+                {activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
 
+              {/* Provider 3. Earnings */}
               <button
                 onClick={() => {
                   setProviderSubScreen('none');
                   setShowSupport(false);
                   setActiveTab('earnings');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
                   activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <Coins className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_earnings')}</span>
+                <FaWallet size={19} color={activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_earnings') || 'Earnings'}
+                </span>
+                {activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
 
+              {/* Provider 4. Profile */}
               <button
                 onClick={() => {
                   setProviderSubScreen('none');
                   setShowSupport(false);
                   setActiveTab('profile');
                 }}
-                className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
                   activeTab === 'profile' && providerSubScreen === 'none' && !showSupport
-                    ? 'text-[#65B32E] font-bold'
+                    ? 'text-[#65B32E]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <User className="w-5 h-5" />
-                <span className="text-[10px]">{t('tab_profile')}</span>
+                <FaUser size={19} color={activeTab === 'profile' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'profile' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
+                  {t('tab_profile') || 'Profile'}
+                </span>
+                {activeTab === 'profile' && providerSubScreen === 'none' && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                )}
               </button>
             </>
           )}
@@ -422,9 +767,14 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class MobileErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class MobileErrorBoundary extends (React.Component as any) {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+  props: any;
+  setState: any;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.props = props;
     this.state = { hasError: false, error: null };
   }
 

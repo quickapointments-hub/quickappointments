@@ -277,6 +277,13 @@ class MobileApiClient {
     }
   }
 
+  async validatePincode(pincode: string) {
+    return this.request('/locations/validate-pincode', {
+      method: 'POST',
+      body: JSON.stringify({ pincode }),
+    });
+  }
+
   async getCategories() {
     try {
       return await this.request('/catalog/categories');
@@ -307,12 +314,58 @@ class MobileApiClient {
   }
 
   async getOffers() {
-    const { data } = await supabase
-      .from('coupons')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-    return { success: true, data: data || [] };
+    return this.request('/catalog/coupons').catch(async () => {
+      const { data } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      return { success: true, data: data || [] };
+    });
+  }
+
+  async validateCoupon(code: string, orderAmount: number) {
+    return this.request('/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code, orderAmount }),
+    });
+  }
+
+  async getCustomerWallet() {
+    return this.request('/customer/wallet');
+  }
+
+  async addCustomerWalletFunds(amount: number, paymentMethod = 'UPI') {
+    return this.request('/customer/wallet/add-funds', {
+      method: 'POST',
+      body: JSON.stringify({ amount, paymentMethod }),
+    });
+  }
+
+  async getCustomerTransactions() {
+    return this.request('/customer/transactions');
+  }
+
+  async getCustomerFavorites() {
+    return this.request('/customer/favorites');
+  }
+
+  async toggleCustomerFavorite(providerId: string) {
+    return this.request('/customer/favorites/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ providerId }),
+    });
+  }
+
+  async getProviderGallery(providerId: string) {
+    return this.request(`/providers/${providerId}/gallery`);
+  }
+
+  async addProviderGalleryImage(imageUrl: string) {
+    return this.request('/provider/gallery', {
+      method: 'POST',
+      body: JSON.stringify({ imageUrl }),
+    });
   }
 
   async getProviders(city?: string, search?: string, categoryId?: string) {
@@ -463,6 +516,31 @@ class MobileApiClient {
 
   async getProviderEarnings() {
     return this.request('/provider/earnings');
+  }
+
+  async getProviderServices() {
+    return this.request('/provider/services');
+  }
+
+  async submitProviderService(payload: {
+    categoryId: string;
+    serviceId?: string;
+    name?: string;
+    description?: string;
+    customPrice: number;
+    customDuration?: number;
+    imageUrl?: string;
+  }) {
+    return this.request('/provider/services', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteProviderService(rateId: string) {
+    return this.request(`/provider/services/${rateId}`, {
+      method: 'DELETE',
+    });
   }
 
   async onboardProvider(payload: any) {

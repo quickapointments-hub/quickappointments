@@ -14,6 +14,8 @@ import {
   RotateCcw,
   CalendarCheck,
   X,
+  FileText,
+  BadgeAlert,
 } from 'lucide-react';
 import { ReviewModal } from '../../components/ReviewModal';
 
@@ -21,7 +23,10 @@ const TIME_SLOTS = [
   '10:00 AM', '11:30 AM', '01:00 PM', '02:30 PM', '04:00 PM', '05:30 PM', '07:00 PM'
 ];
 
-export const CustomerBookingsScreen: React.FC = () => {
+export const CustomerBookingsScreen: React.FC<{
+  onViewInvoice?: (b: any) => void;
+  onTrackRefund?: (b: any) => void;
+}> = ({ onViewInvoice, onTrackRefund }) => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [filter, setFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED'>('UPCOMING');
   const [loading, setLoading] = useState(true);
@@ -242,6 +247,16 @@ export const CustomerBookingsScreen: React.FC = () => {
                   >
                     Details
                   </button>
+
+                  {onViewInvoice && (
+                    <button
+                      onClick={() => onViewInvoice(b)}
+                      title="View Tax Invoice"
+                      className="px-2.5 py-2 rounded-xl text-xs font-bold text-[#16A34A] bg-[#EFF8E7] hover:bg-[#E2F4D5] border border-[#65B32E] transition-all cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -259,6 +274,27 @@ export const CustomerBookingsScreen: React.FC = () => {
                     className="px-3 py-2 rounded-xl text-xs font-bold text-[#4B5563] bg-[#FAF8F0] hover:bg-white border border-[#E8E4D9] transition-all cursor-pointer"
                   >
                     Details
+                  </button>
+                  {onViewInvoice && (
+                    <button
+                      onClick={() => onViewInvoice(b)}
+                      title="View Tax Invoice"
+                      className="px-2.5 py-2 rounded-xl text-xs font-bold text-[#16A34A] bg-[#EFF8E7] hover:bg-[#E2F4D5] border border-[#65B32E] transition-all cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(b.status === 'CANCELLED' || b.status === 'DECLINED') && onTrackRefund && (
+                <div className="pt-2 border-t border-[#F2EFE8] flex items-center gap-2">
+                  <button
+                    onClick={() => onTrackRefund(b)}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold text-[#16A34A] bg-[#EFF8E7] hover:bg-[#E2F4D5] border border-[#65B32E] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <BadgeAlert className="w-3.5 h-3.5 text-[#16A34A]" />
+                    <span>Track Refund (100% Refund Status)</span>
                   </button>
                 </div>
               )}

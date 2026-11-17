@@ -21,7 +21,15 @@ interface CategoryItem {
   displayOrder: number;
 }
 
-export const CatalogPage: React.FC = () => {
+interface CatalogPageProps {
+  onNavigateToRateCards?: () => void;
+  onNavigateToServices?: () => void;
+}
+
+export const CatalogPage: React.FC<CatalogPageProps> = ({
+  onNavigateToRateCards,
+  onNavigateToServices,
+}) => {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -161,6 +169,36 @@ export const CatalogPage: React.FC = () => {
           <Plus className="w-4 h-4 stroke-[2.5]" />
           <span>Add Category</span>
         </button>
+      </div>
+
+      {/* Sub-navigation Tabs: Categories | Catalog Services | Swiggy Rate Cards */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100/80 rounded-2xl w-fit border border-slate-200/60 text-xs font-bold">
+        <button
+          type="button"
+          className="px-4 py-2 rounded-xl bg-white text-slate-900 shadow-xs cursor-default flex items-center gap-2"
+        >
+          <Layers className="w-3.5 h-3.5 text-[#16A34A]" />
+          <span>Categories Directory</span>
+        </button>
+        {onNavigateToServices && (
+          <button
+            type="button"
+            onClick={onNavigateToServices}
+            className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-colors cursor-pointer"
+          >
+            Standard Services
+          </button>
+        )}
+        {onNavigateToRateCards && (
+          <button
+            type="button"
+            onClick={onNavigateToRateCards}
+            className="px-4 py-2 rounded-xl text-slate-600 hover:text-[#16A34A] hover:bg-white/60 transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Provider Menu Approvals (Swiggy Flow)</span>
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          </button>
+        )}
       </div>
 
       {/* Grid of Category Cards */}

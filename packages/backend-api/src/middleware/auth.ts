@@ -100,8 +100,8 @@ export async function requireApprovedProvider(req: Request, res: Response, next:
           row.verification_status === 'REJECTED'
             ? 'Your Service Provider application was rejected. Review feedback or re-submit documents.'
             : row.verification_status === 'NEEDS_INFO'
-            ? 'Admin requested updated KYC documents before approving your provider account.'
-            : 'Your Service Provider account is pending Admin verification. Access to provider features is disabled until approved.',
+              ? 'Admin requested updated KYC documents before approving your provider account.'
+              : 'Your Service Provider account is pending Admin verification. Access to provider features is disabled until approved.',
         verificationStatus: row.verification_status,
         rejectionReason: row.rejection_reason || null,
       });

@@ -71,6 +71,34 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     dateTime: string;
   } | null>(null);
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    try {
+      setValidatingCoupon(true);
+      setCouponError(null);
+      const res = await mobileApi.validateCoupon(couponCode.trim(), service.basePrice);
+      if (res.valid) {
+        setCouponDiscount(res.discountAmount || 0);
+        setCouponSuccess(`Coupon ${res.coupon?.code || couponCode.toUpperCase()} applied! You save ₹${res.discountAmount}`);
+      } else {
+        setCouponError(res.message || 'Invalid coupon code');
+        setCouponDiscount(0);
+      }
+    } catch (err: any) {
+      setCouponError(err.message || 'Failed to validate coupon');
+      setCouponDiscount(0);
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
   // 5-Minute Lock Countdown Timer (Provider Acceptance SLA based on server timestamp)
   useEffect(() => {
     if (!reservation) return;
@@ -192,7 +220,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const handlePayWithRazorpay = async () => {
     try {
       setSimulatingPayment(true);
-      const totalAmount = service.basePrice + Math.round(service.basePrice * 0.05);
+      const subtotal = service.basePrice;
+      const taxes = Math.round(subtotal * 0.05);
+      const totalAmount = Math.max(0, subtotal + taxes - couponDiscount);
       const orderRes = await mobileApi.createPaymentOrder(totalAmount, reservation?.id);
       const order = orderRes?.data || orderRes;
       const now = new Date();
@@ -375,12 +405,51 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <span>GST / Taxes (5%)</span>
                 <span>₹{Math.round(service.basePrice * 0.05)}</span>
               </div>
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-bold">
+                  <span>Coupon Discount</span>
+                  <span>-₹{couponDiscount}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-sm text-slate-900">
                 <span>Total Amount</span>
                 <span className="text-brand-600">
-                  ₹{service.basePrice + Math.round(service.basePrice * 0.05)}
+                  ₹{Math.max(0, service.basePrice + Math.round(service.basePrice * 0.05) - couponDiscount)}
                 </span>
               </div>
+            </div>
+
+            {/* Apply Promo / Coupon Code */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700">
+                Have a Coupon Code?
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value.toUpperCase());
+                    setCouponError(null);
+                  }}
+                  placeholder="e.g. QUICK50, WELCOME100"
+                  className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={validatingCoupon || !couponCode.trim()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {validatingCoupon ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+              {couponSuccess && (
+                <p className="text-[11px] text-emerald-600 font-bold">{couponSuccess}</p>
+              )}
+              {couponError && (
+                <p className="text-[11px] text-red-500 font-medium">{couponError}</p>
+              )}
             </div>
 
             {/* Special Instructions */}
@@ -442,7 +511,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <span>Pay Now ₹{service.basePrice + Math.round(service.basePrice * 0.05)}</span>
+                    <span>Pay Now ₹{Math.max(0, service.basePrice + Math.round(service.basePrice * 0.05) - couponDiscount)}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

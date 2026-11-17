@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { mobileApi } from '../../api';
+import { QuickAppointmentsLogo } from '../../components/QuickAppointmentsLogo';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabase';
 import {
   MapPin,
   Search,
   Bell,
-  Star,
   Sparkles,
   Scissors,
   Home,
@@ -16,6 +16,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
 import { BookingModal } from '../../components/BookingModal';
 
@@ -30,11 +31,22 @@ const pickTopIcon = (name: string) => {
 };
 
 export const CustomerHomeScreen: React.FC<{
+  selectedCity?: string;
+  onChangeCity?: (city: string) => void;
+  onOpenLocationModal?: () => void;
   onSelectCategory: (cat: any) => void;
   onNavigateToBookings: () => void;
   onOpenSearch?: () => void;
   onViewAllCategories?: () => void;
-}> = ({ onSelectCategory, onNavigateToBookings, onOpenSearch, onViewAllCategories }) => {
+}> = ({
+  selectedCity: propCity,
+  onChangeCity,
+  onOpenLocationModal,
+  onSelectCategory,
+  onNavigateToBookings,
+  onOpenSearch,
+  onViewAllCategories,
+}) => {
   const { user } = useAuth();
   const [categories, setCategories] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -44,8 +56,12 @@ export const CustomerHomeScreen: React.FC<{
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedProvider, setSelectedProvider] = useState<any>(null);
   const [selectedCity, setSelectedCity] = useState(
-    user?.customerProfile?.city || 'Hyderabad'
+    propCity || user?.customerProfile?.city || 'Hyderabad'
   );
+
+  useEffect(() => {
+    if (propCity) setSelectedCity(propCity);
+  }, [propCity]);
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -93,6 +109,7 @@ export const CustomerHomeScreen: React.FC<{
     const unsubscribeSync = mobileApi.subscribeToSync((event) => {
       loadHomeData();
       if (event === 'cities_updated') loadCities();
+      if (event === 'banners_updated' || event === 'catalog_updated') loadHomeData();
     });
 
     const channel = supabase
@@ -101,6 +118,8 @@ export const CustomerHomeScreen: React.FC<{
       .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, loadHomeData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cities' }, loadCities)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'provider_profiles' }, loadHomeData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, loadHomeData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, loadHomeData)
       .subscribe();
 
     return () => {
@@ -126,29 +145,19 @@ export const CustomerHomeScreen: React.FC<{
     <div className="pb-24 space-y-5 bg-[#FDFCF4] text-[#111111]">
       {/* Top Bar with Brand Logo & City Selector Pill */}
       <div className="px-5 pt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Quick Appointments" className="h-8 w-auto object-contain" />
-        </div>
+        <QuickAppointmentsLogo />
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E8E4D9] text-xs font-bold text-[#111111] shadow-sm">
+          <button
+            type="button"
+            onClick={onOpenLocationModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E8E4D9] text-xs font-bold text-[#111111] shadow-sm hover:border-[#16A34A] transition-colors cursor-pointer"
+            title="Check postal pincode or change location"
+          >
             <MapPin className="w-3.5 h-3.5 text-[#16A34A]" />
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="bg-transparent font-bold text-xs focus:outline-none cursor-pointer text-[#111111]"
-            >
-              {cities.length > 0 ? (
-                cities.map((c) => (
-                  <option key={c?.id || c?.name} value={c?.name}>
-                    {c?.name}
-                  </option>
-                ))
-              ) : (
-                <option value={selectedCity}>{selectedCity}</option>
-              )}
-            </select>
-          </div>
+            <span className="truncate max-w-[110px]">{selectedCity}</span>
+            <ChevronDown className="w-3 h-3 text-[#6B7280]" />
+          </button>
 
           <button
             onClick={onNavigateToBookings}
@@ -348,13 +357,6 @@ export const CustomerHomeScreen: React.FC<{
                     <p className="text-[11px] text-[#4B5563] truncate">
                       {p?.category?.name || p?.city || 'Local Specialist'}
                     </p>
-                    <div className="flex items-center gap-1 text-[11px] font-bold text-[#111111] mt-0.5">
-                      <Star className="w-3 h-3 fill-[#F59E0B] text-[#F59E0B]" />
-                      <span>{p?.rating || p?.ratingAvg || '4.8'}</span>
-                      <span className="text-[#6B7280] font-normal">
-                        ({p?.totalReviews || 0})
-                      </span>
-                    </div>
                   </div>
                 </div>
 
