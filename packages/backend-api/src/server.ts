@@ -1409,7 +1409,7 @@ app.patch(
 );
 
 app.get(
-  '/api/bookings/provider',
+  ['/api/bookings/provider', '/api/provider/bookings'],
   authenticateToken,
   requireRole([UserRole.PROVIDER]),
   requireApprovedProvider,

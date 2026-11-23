@@ -182,7 +182,7 @@ export const ProviderDashboardScreen: React.FC<{
         </p>
       </div>
 
-      {/* Services & Menu Management Shortcut (Swiggy Partner Flow) */}
+      {/* Services & Menu Management Shortcut */}
       <div
         onClick={onNavigateToServices}
         className="p-4 rounded-2xl bg-white border border-[#E8E4D9] shadow-sm flex items-center justify-between cursor-pointer hover:border-[#65B32E] transition-all"
@@ -192,7 +192,7 @@ export const ProviderDashboardScreen: React.FC<{
             <Layers className="w-4 h-4 text-[#65B32E]" />
           </div>
           <div>
-            <h4 className="font-bold text-xs text-[#111111]">My Services & Menu (Swiggy Partner Flow)</h4>
+            <h4 className="font-bold text-xs text-[#111111]">My Services & Menu</h4>
             <p className="text-[10px] text-[#4B5563]">Upload services, custom pricing & view live Admin approvals</p>
           </div>
         </div>
@@ -293,7 +293,7 @@ export const ProviderDashboardScreen: React.FC<{
                       className="flex-1 py-2 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5 text-white" />
-                      <span>Verify Customer Delivery OTP</span>
+                      <span>Check-In Arriving Customer</span>
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(b.id, 'CANCELLED')}

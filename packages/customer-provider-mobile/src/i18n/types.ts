@@ -88,6 +88,7 @@ export interface TranslationDictionary {
   // Navigation
   tab_home: string;
   tab_explore: string;
+  tab_search?: string;
   tab_bookings: string;
   tab_support: string;
   tab_profile: string;

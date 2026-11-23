@@ -18,6 +18,7 @@ import {
   BadgeAlert,
 } from 'lucide-react';
 import { ReviewModal } from '../../components/ReviewModal';
+import { AppointmentTrackerModal } from '../../components/AppointmentTrackerModal';
 
 const TIME_SLOTS = [
   '10:00 AM', '11:30 AM', '01:00 PM', '02:30 PM', '04:00 PM', '05:30 PM', '07:00 PM'
@@ -361,55 +362,24 @@ export const CustomerBookingsScreen: React.FC<{
         </div>
       )}
 
-      {/* APPOINTMENT DETAILS MODAL */}
+      {/* APPOINTMENT DETAILS & LIVE TRACKER MODAL (Matching Screenshot 4) */}
       {detailsBooking && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
-              <h3 className="font-bold text-sm text-[#111111]">Appointment Details</h3>
-              <button
-                onClick={() => setDetailsBooking(null)}
-                className="w-7 h-7 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#4B5563]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 text-xs">
-              <div className="p-3 bg-white rounded-xl border border-[#E8E4D9]">
-                <span className="text-[10px] text-[#6B7280] block font-semibold">Service</span>
-                <span className="font-bold text-[#111111] text-sm">{detailsBooking.service?.name}</span>
-              </div>
-
-              <div className="p-3 bg-white rounded-xl border border-[#E8E4D9]">
-                <span className="text-[10px] text-[#6B7280] block font-semibold">Specialist Provider</span>
-                <span className="font-bold text-[#111111]">{detailsBooking.provider?.businessName || 'Verified Specialist'}</span>
-              </div>
-
-              <div className="p-3 bg-white rounded-xl border border-[#E8E4D9]">
-                <span className="text-[10px] text-[#6B7280] block font-semibold">Scheduled Date & Time</span>
-                <span className="font-bold text-[#111111]">{detailsBooking.date} • {detailsBooking.startTime}</span>
-              </div>
-
-              <div className="p-3 bg-white rounded-xl border border-[#E8E4D9]">
-                <span className="text-[10px] text-[#6B7280] block font-semibold">Amount Paid</span>
-                <span className="font-black text-[#111111] text-sm">₹{detailsBooking.totalAmount}</span>
-              </div>
-
-              <div className="p-3 bg-[#EFF8E7] rounded-xl border border-[#65B32E]">
-                <span className="text-[10px] text-[#111111] block font-bold">Delivery Verification OTP</span>
-                <span className="font-mono font-black text-base tracking-widest text-[#111111]">{detailsBooking.serviceOtp || '123456'}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setDetailsBooking(null)}
-              className="w-full py-2.5 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-        </div>
+        <AppointmentTrackerModal
+          isOpen={Boolean(detailsBooking)}
+          onClose={() => setDetailsBooking(null)}
+          booking={detailsBooking}
+          onReschedule={(b) => {
+            setDetailsBooking(null);
+            setReschedulingBooking(b);
+          }}
+          onCancel={(b) => {
+            setDetailsBooking(null);
+            handleCancelBooking(b.id);
+          }}
+          onOpenSupport={() => {
+            alert('Connecting you with 24/7 Quick Appointments Support Desk.');
+          }}
+        />
       )}
 
       {/* Review Modal */}

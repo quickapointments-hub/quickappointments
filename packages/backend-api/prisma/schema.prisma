@@ -223,7 +223,9 @@ model Booking {
   customerId         String
   providerId         String
   serviceId          String
-  status             String   @default("CONFIRMED") // PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, RESCHEDULED
+  branchId           String?
+  staffId            String?
+  status             String   @default("CONFIRMED") // PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, RESCHEDULED, NO_SHOW
   date               String   // "YYYY-MM-DD"
   startTime          String   // "10:00"
   endTime            String   // "11:00"
@@ -239,7 +241,7 @@ model Booking {
   paymentStatus      String   @default("PAID") // PENDING, PROCESSING, PAID, FAILED, REFUNDED
   paymentMethod      String   @default("CASH_ON_SERVICE")
   paymentRef         String?
-  serviceOtp         String?  // 6-digit customer verification OTP to start/complete service
+  serviceOtp         String?  // 4-6 digit customer verification / check-in code
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -247,6 +249,8 @@ model Booking {
   customer           CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Restrict)
   provider           ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
   service            Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  branch             ProviderBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  staff              ProviderStaff?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
   history            BookingStatusHistory[]
   paymentTx          PaymentTransaction[]
   review             Review?
@@ -540,6 +544,7 @@ model ProviderBranch {
 
   provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
   staff      ProviderStaff[]
+  bookings   Booking[]
 
   @@index([providerId])
 }
@@ -557,6 +562,7 @@ model ProviderStaff {
 
   provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
   branch      ProviderBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  bookings    Booking[]
 
   @@index([providerId])
 }

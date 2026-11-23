@@ -165,6 +165,7 @@ export const App: React.FC = () => {
           onNavigateToProfile={() => setCurrentTab('admin_profile')}
           onLogout={handleLogout}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onNavigateTab={(tab) => setCurrentTab(tab)}
         />
 
         <main className="flex-1 pb-16">

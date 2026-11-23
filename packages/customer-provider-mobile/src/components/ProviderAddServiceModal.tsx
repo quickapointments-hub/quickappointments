@@ -115,7 +115,7 @@ export const ProviderAddServiceModal: React.FC<ProviderAddServiceModalProps> = (
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-[#111111]">Offer New Service / Dish</h3>
-              <p className="text-[11px] text-[#4B5563]">Swiggy partner workflow with Admin review</p>
+              <p className="text-[11px] text-[#4B5563]">Partner workflow with Admin review</p>
             </div>
           </div>
           <button
@@ -256,7 +256,7 @@ export const ProviderAddServiceModal: React.FC<ProviderAddServiceModalProps> = (
           </div>
 
           <div className="p-3 bg-[#EFF8E7] rounded-xl border border-[#65B32E]/20 text-[11px] text-[#2C481A] space-y-1">
-            <p className="font-bold">Two-Tier Governance (Swiggy Partner Flow):</p>
+            <p className="font-bold">Two-Tier Governance (Partner Flow):</p>
             <p>
               Your custom service and rate card will be placed in the Admin Review queue. Once approved by the operations team, it instantly goes live for customers to book in the app.
             </p>

@@ -33,20 +33,17 @@ import {
   Maximize2,
   Repeat,
   Globe,
+  Home,
+  Search,
+  CalendarCheck2,
+  Heart,
+  User,
+  LayoutDashboard,
+  Clock,
+  Wallet,
+  Sparkles,
+  Tag,
 } from 'lucide-react';
-import {
-  FaHome,
-  FaSearch,
-  FaCalendarCheck,
-  FaHeart,
-  FaUser,
-  FaTachometerAlt,
-  FaClock,
-  FaWallet,
-  FaCoins,
-  FaTicketAlt,
-  FaImages,
-} from './components/FontAwesomeIcons';
 import { WalletModal } from './components/WalletModal';
 import { TransactionHistoryModal } from './components/TransactionHistoryModal';
 import { OffersCouponsModal } from './components/OffersCouponsModal';
@@ -63,13 +60,7 @@ import { ProviderAddServiceModal } from './components/ProviderAddServiceModal';
 const MobileNavigationContent: React.FC = () => {
   const { user, activeRole, isAuthenticated, switchRole } = useAuth();
   const { currentLanguage, languages, t } = useLanguage();
-  const [showSplash, setShowSplash] = useState(() => {
-    try {
-      return sessionStorage.getItem('qa_splash_shown') !== 'true';
-    } catch {
-      return true;
-    }
-  });
+  const [showSplash, setShowSplash] = useState(false);
   const [onboardingStage, setOnboardingStage] = useState<'carousel' | 'location' | 'auth'>('carousel');
   const [showLangModal, setShowLangModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -111,7 +102,7 @@ const MobileNavigationContent: React.FC = () => {
     try {
       const saved = localStorage.getItem('qa_selected_city');
       if (saved) return saved;
-    } catch {}
+    } catch { }
     return user?.customerProfile?.city || 'Hyderabad';
   });
 
@@ -120,7 +111,7 @@ const MobileNavigationContent: React.FC = () => {
     setCurrentCity(cityName);
     try {
       localStorage.setItem('qa_selected_city', cityName);
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -136,7 +127,7 @@ const MobileNavigationContent: React.FC = () => {
           : activeNames[0];
         handleCityChange(fallback);
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Listen to realtime city updates when admin enables/disables cities in Admin Panel
     const channel = supabase
@@ -149,10 +140,10 @@ const MobileNavigationContent: React.FC = () => {
             const next = activeNames.includes(prev) ? prev : activeNames[0];
             try {
               localStorage.setItem('qa_selected_city', next);
-            } catch {}
+            } catch { }
             return next;
           });
-        }).catch(() => {});
+        }).catch(() => { });
       })
       .subscribe();
 
@@ -165,10 +156,10 @@ const MobileNavigationContent: React.FC = () => {
             const next = activeNames.includes(prev) ? prev : activeNames[0];
             try {
               localStorage.setItem('qa_selected_city', next);
-            } catch {}
+            } catch { }
             return next;
           });
-        }).catch(() => {});
+        }).catch(() => { });
       }
     });
 
@@ -279,16 +270,23 @@ const MobileNavigationContent: React.FC = () => {
 
       {/* Mobile Frame Container (Official Cream Background) */}
       <div
-        className={`w-full bg-[#FDFCF4] overflow-hidden relative transition-all duration-300 flex flex-col ${
-          isPhoneFrame
-            ? 'sm:max-w-[400px] h-screen sm:h-[844px] sm:rounded-[48px] sm:border-[8px] sm:border-[#E8E4D9] shadow-2xl'
-            : 'max-w-2xl min-h-screen sm:rounded-3xl shadow-xl'
-        }`}
+        className={`w-full bg-[#FDFCF4] overflow-hidden relative transition-all duration-300 flex flex-col ${isPhoneFrame
+          ? 'sm:max-w-[400px] h-screen sm:h-[844px] sm:rounded-[48px] sm:border-[8px] sm:border-[#E8E4D9] shadow-2xl'
+          : 'max-w-2xl min-h-screen sm:rounded-3xl shadow-xl'
+          }`}
       >
         {/* Device Notch & Status bar */}
-        <div className="h-10 px-6 pt-3 flex items-center justify-between text-xs font-semibold text-[#111111] select-none bg-[#FDFCF4] shrink-0 border-b border-[#F2EFE8]">
-          <span className="font-mono text-[11px] font-bold">9:41</span>
-          <div className="w-24 h-4 bg-[#111111] rounded-full mx-auto hidden sm:block" />
+        <div className="h-11 px-6 pt-2 flex items-center justify-between text-xs font-semibold text-[#111111] select-none bg-[#FDFCF4] shrink-0 border-b border-[#F2EFE8]">
+          <span className="font-mono text-[11px] font-bold tracking-tight">9:41</span>
+
+          {/* Dynamic Island Pill with Camera & Sensor Elements */}
+          <div className="hidden sm:flex items-center justify-center gap-2 px-3 py-1 bg-[#111111] rounded-full mx-auto shadow-inner">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#1F2937] ring-1 ring-white/10 flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-[#374151]" />
+            </div>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" title="System Live" />
+          </div>
+
           <div className="flex items-center gap-1.5 text-[10px]">
             <span
               onClick={() => {
@@ -298,7 +296,7 @@ const MobileNavigationContent: React.FC = () => {
                 setProviderSubScreen('none');
                 switchRole(activeRole === 'CUSTOMER' ? 'PROVIDER' : 'CUSTOMER');
               }}
-              className="cursor-pointer font-bold px-2 py-0.5 rounded-full bg-[#EFF8E7] text-[#111111] border border-[#65B32E]"
+              className="cursor-pointer font-bold px-2 py-0.5 rounded-full bg-[#EFF8E7] text-[#111111] border border-[#65B32E] hover:bg-[#65B32E] hover:text-white transition-colors"
             >
               {activeRole} ⇄
             </span>
@@ -384,7 +382,7 @@ const MobileNavigationContent: React.FC = () => {
                         onClick={() => setShowFavorites(true)}
                         className="w-full py-4 bg-white border border-[#E8E4D9] rounded-2xl shadow-xs text-xs font-bold text-[#65B32E] flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        <FaHeart size={14} color="#65B32E" />
+                        <Heart className="w-4 h-4 fill-[#65B32E] text-[#65B32E]" />
                         <span>View All Favourite Specialists</span>
                       </button>
                     </div>
@@ -515,7 +513,7 @@ const MobileNavigationContent: React.FC = () => {
           isOpen={showServiceDetailModal}
           service={detailService}
           onClose={() => setShowServiceDetailModal(false)}
-          onBookNow={(_srv) => {}}
+          onBookNow={(_srv) => { }}
         />
         <ProviderGalleryModal
           isOpen={showGalleryModal}
@@ -547,52 +545,30 @@ const MobileNavigationContent: React.FC = () => {
         >
           {activeRole === 'CUSTOMER' ? (
             <>
-              {/* 1. Home */}
-              <button
-                onClick={() => {
-                  setSelectedCategory(null);
-                  setShowSupport(false);
-                  setActiveTab('home');
-                }}
-                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'home' && !showAllCategories && !showSupport
-                    ? 'text-[#65B32E]'
-                    : 'text-[#6B7280] hover:text-[#111111]'
-                }`}
-              >
-                <FaHome size={19} color={activeTab === 'home' && !showAllCategories && !showSupport ? '#65B32E' : '#6B7280'} />
-                <span className={`text-[10px] ${activeTab === 'home' && !showAllCategories && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
-                  {t('tab_home') || 'Home'}
-                </span>
-                {activeTab === 'home' && !showAllCategories && !showSupport && (
-                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
-                )}
-              </button>
-
-              {/* 2. Search */}
+              {/* 1. Explore (Matching Screenshot 1) */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
                   setShowAllCategories(false);
                   setShowSupport(false);
-                  setActiveTab('search');
+                  setActiveTab('home');
                 }}
                 className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'search' || showAllCategories
-                    ? 'text-[#65B32E]'
+                  activeTab === 'home' && !showAllCategories && !showSupport
+                    ? 'text-[#16A34A]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaSearch size={18} color={activeTab === 'search' || showAllCategories ? '#65B32E' : '#6B7280'} />
-                <span className={`text-[10px] ${activeTab === 'search' || showAllCategories ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
-                  {t('tab_search') || 'Search'}
+                <Sparkles className="w-5 h-5 stroke-[2]" color={activeTab === 'home' && !showAllCategories && !showSupport ? '#16A34A' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'home' && !showAllCategories && !showSupport ? 'font-black text-[#111111]' : 'font-medium'}`}>
+                  Explore
                 </span>
-                {(activeTab === 'search' || showAllCategories) && (
-                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                {activeTab === 'home' && !showAllCategories && !showSupport && (
+                  <div className="w-4 h-0.5 bg-[#16A34A] rounded-full mt-0.5" />
                 )}
               </button>
 
-              {/* 3. Appointments */}
+              {/* 2. Bookings (Matching Screenshot 1 with (1) badge) */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
@@ -600,45 +576,40 @@ const MobileNavigationContent: React.FC = () => {
                   setShowSupport(false);
                   setActiveTab('bookings');
                 }}
-                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
                   activeTab === 'bookings'
-                    ? 'text-[#65B32E]'
+                    ? 'text-[#16A34A]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaCalendarCheck size={18} color={activeTab === 'bookings' ? '#65B32E' : '#6B7280'} />
-                <span className={`text-[10px] ${activeTab === 'bookings' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
-                  {t('tab_bookings') || 'Appointments'}
+                <div className="relative">
+                  <CalendarCheck2 className="w-5 h-5 stroke-[2]" color={activeTab === 'bookings' ? '#16A34A' : '#6B7280'} />
+                  <span className="absolute -top-1 -right-2 px-1 py-0.2 min-w-[14px] h-3.5 rounded-full bg-[#16A34A] text-white text-[9px] font-black flex items-center justify-center ring-1 ring-white">
+                    1
+                  </span>
+                </div>
+                <span className={`text-[10px] ${activeTab === 'bookings' ? 'font-black text-[#111111]' : 'font-medium'}`}>
+                  Bookings
                 </span>
                 {activeTab === 'bookings' && (
-                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                  <div className="w-4 h-0.5 bg-[#16A34A] rounded-full mt-0.5" />
                 )}
               </button>
 
-              {/* 4. Favourites */}
+              {/* 3. Offers (Matching Screenshot 1) */}
               <button
                 onClick={() => {
-                  setSelectedCategory(null);
-                  setShowAllCategories(false);
-                  setShowSupport(false);
-                  setActiveTab('favorites');
+                  setShowOffers(true);
                 }}
-                className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                  activeTab === 'favorites'
-                    ? 'text-[#65B32E]'
-                    : 'text-[#6B7280] hover:text-[#111111]'
-                }`}
+                className="flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer text-[#6B7280] hover:text-[#111111]"
               >
-                <FaHeart size={18} color={activeTab === 'favorites' ? '#65B32E' : '#6B7280'} />
-                <span className={`text-[10px] ${activeTab === 'favorites' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
-                  Favourites
+                <Tag className="w-5 h-5 stroke-[2]" color="#6B7280" />
+                <span className="text-[10px] font-medium">
+                  Offers
                 </span>
-                {activeTab === 'favorites' && (
-                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
-                )}
               </button>
 
-              {/* 5. Profile */}
+              {/* 4. Profile (Matching Screenshot 1) */}
               <button
                 onClick={() => {
                   setSelectedCategory(null);
@@ -648,16 +619,16 @@ const MobileNavigationContent: React.FC = () => {
                 }}
                 className={`flex-1 flex flex-col items-center gap-1 transition-all cursor-pointer ${
                   activeTab === 'profile'
-                    ? 'text-[#65B32E]'
+                    ? 'text-[#16A34A]'
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaUser size={18} color={activeTab === 'profile' ? '#65B32E' : '#6B7280'} />
-                <span className={`text-[10px] ${activeTab === 'profile' ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
-                  {t('tab_profile') || 'Profile'}
+                <User className="w-5 h-5 stroke-[2]" color={activeTab === 'profile' ? '#16A34A' : '#6B7280'} />
+                <span className={`text-[10px] ${activeTab === 'profile' ? 'font-black text-[#111111]' : 'font-medium'}`}>
+                  Profile
                 </span>
                 {activeTab === 'profile' && (
-                  <div className="w-4 h-0.5 bg-[#65B32E] rounded-full mt-0.5" />
+                  <div className="w-4 h-0.5 bg-[#16A34A] rounded-full mt-0.5" />
                 )}
               </button>
             </>
@@ -676,7 +647,7 @@ const MobileNavigationContent: React.FC = () => {
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaTachometerAlt size={19} color={activeTab === 'home' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <LayoutDashboard className="w-5 h-5 stroke-[1.9]" color={activeTab === 'home' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
                 <span className={`text-[10px] ${activeTab === 'home' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
                   {t('tab_dashboard') || 'Dashboard'}
                 </span>
@@ -698,7 +669,7 @@ const MobileNavigationContent: React.FC = () => {
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaClock size={19} color={activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <Clock className="w-5 h-5 stroke-[1.9]" color={activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
                 <span className={`text-[10px] ${activeTab === 'schedule' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
                   {t('tab_availability') || 'Schedule'}
                 </span>
@@ -720,7 +691,7 @@ const MobileNavigationContent: React.FC = () => {
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaWallet size={19} color={activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <Wallet className="w-5 h-5 stroke-[1.9]" color={activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
                 <span className={`text-[10px] ${activeTab === 'earnings' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
                   {t('tab_earnings') || 'Earnings'}
                 </span>
@@ -742,7 +713,7 @@ const MobileNavigationContent: React.FC = () => {
                     : 'text-[#6B7280] hover:text-[#111111]'
                 }`}
               >
-                <FaUser size={19} color={activeTab === 'profile' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
+                <User className="w-5 h-5 stroke-[1.9]" color={activeTab === 'profile' && providerSubScreen === 'none' && !showSupport ? '#65B32E' : '#6B7280'} />
                 <span className={`text-[10px] ${activeTab === 'profile' && providerSubScreen === 'none' && !showSupport ? 'font-black text-[#1B3808]' : 'font-medium'}`}>
                   {t('tab_profile') || 'Profile'}
                 </span>
@@ -767,14 +738,11 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class MobileErrorBoundary extends (React.Component as any) {
-  state: ErrorBoundaryState = { hasError: false, error: null };
-  props: any;
-  setState: any;
+class MobileErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  override state: ErrorBoundaryState = { hasError: false, error: null };
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
     this.state = { hasError: false, error: null };
   }
 
@@ -782,29 +750,36 @@ class MobileErrorBoundary extends (React.Component as any) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('App Render Error Boundary caught:', error, errorInfo);
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#FDFCF4] flex flex-col items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-[#FDFCF4] flex flex-col items-center justify-center p-6 text-center font-sans">
           <div className="w-16 h-16 rounded-full bg-[#EFF8E7] border border-[#65B32E]/30 text-[#65B32E] flex items-center justify-center mb-4 text-2xl font-bold">
             ⚡
           </div>
-          <h2 className="text-xl font-extrabold text-[#111111] mb-2">Something went wrong</h2>
+          <h2 className="text-xl font-extrabold text-[#111111] mb-2">Quick Appointments</h2>
+          <p className="text-xs text-rose-600 font-mono max-w-sm mb-4 break-words bg-rose-50 p-3 rounded-xl border border-rose-100">
+            {this.state.error?.message || 'Rendering error'}
+          </p>
           <p className="text-xs text-[#4B5563] max-w-xs mb-6">
             An unexpected error occurred while loading this view.
           </p>
           <button
             onClick={() => {
               this.setState({ hasError: false, error: null });
+              try {
+                localStorage.removeItem('qa_mobile_user');
+                sessionStorage.clear();
+              } catch {}
               window.location.reload();
             }}
             className="px-6 py-2.5 rounded-full bg-[#65B32E] hover:bg-[#529624] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
           >
-            Reload App
+            Reset & Reload App
           </button>
         </div>
       );

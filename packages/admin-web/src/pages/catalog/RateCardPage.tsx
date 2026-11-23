@@ -104,7 +104,7 @@ export const RateCardPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold font-display text-slate-900 tracking-tight flex items-center gap-2">
             <Tag className="w-5 h-5 text-[#16A34A]" />
-            <span>Provider Menu & Services Approval (Swiggy Partner Flow)</span>
+            <span>Provider Menu & Services Approval</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             Review and approve custom services, menu offerings, and pricing uploaded by providers before they appear in the customer mobile app.

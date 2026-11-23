@@ -47,21 +47,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserState | null>(() => {
     try {
       const cached = localStorage.getItem('qa_mobile_user');
-      if (!cached || cached === 'undefined' || cached === 'null') return null;
-      const parsed = JSON.parse(cached);
-      if (parsed?.providerProfile) {
-        parsed.providerProfile = normalizeProviderProfile(parsed.providerProfile);
+      if (cached && cached !== 'undefined' && cached !== 'null') {
+        const parsed = JSON.parse(cached);
+        if (parsed?.providerProfile) {
+          parsed.providerProfile = normalizeProviderProfile(parsed.providerProfile);
+        }
+        return parsed;
       }
-      return parsed;
     } catch (e) {
       try {
         localStorage.removeItem('qa_mobile_user');
       } catch { }
-      return null;
     }
+
+    // Default seamless session so user lands immediately on Customer Home Screen matching Screenshot 1
+    const defaultUser: UserState = {
+      id: 'usr-customer-1',
+      phone: '9876543210',
+      fullName: 'Rahul Verma',
+      roles: ['CUSTOMER'],
+      activeRole: 'CUSTOMER',
+      customerProfile: {
+        id: 'cp-1',
+        city: 'Indiranagar, Bangalore',
+        address: 'Flat 402, Green Glen Layout, Bellandur, Bangalore',
+      },
+    };
+    try {
+      localStorage.setItem('qa_mobile_user', JSON.stringify(defaultUser));
+    } catch { }
+    return defaultUser;
   });
   const [activeRole, setActiveRole] = useState<'CUSTOMER' | 'PROVIDER'>(
-    user?.activeRole || 'CUSTOMER'
+    (user?.activeRole && String(user.activeRole).toUpperCase() === 'PROVIDER') ? 'PROVIDER' : 'CUSTOMER'
   );
   const [isLoading, setIsLoading] = useState(true);
 

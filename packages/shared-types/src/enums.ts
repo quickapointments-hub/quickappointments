@@ -29,6 +29,7 @@ export enum BookingStatus {
   HELD = 'HELD',
   AWAITING = 'AWAITING',
   CONFIRMED = 'CONFIRMED',
+  CHECKED_IN = 'CHECKED_IN',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
   SETTLED = 'SETTLED',
@@ -37,6 +38,7 @@ export enum BookingStatus {
   DECLINED = 'DECLINED',
   EXPIRED = 'EXPIRED',
   RESCHEDULED = 'RESCHEDULED',
+  NO_SHOW = 'NO_SHOW',
 }
 
 export enum PaymentStatus {

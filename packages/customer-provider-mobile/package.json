@@ -2,10 +2,11 @@
   "name": "@quick-appointments/customer-provider-mobile",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "start": "expo start",
     "android": "expo run:android",

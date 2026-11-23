@@ -35,7 +35,7 @@ interface AppointmentItem {
 export const BookingsPage: React.FC = () => {
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Confirmed' | 'Ongoing' | 'Completed' | 'Cancelled'>('All');
+  const [activeTab, setActiveTab] = useState<'All' | 'Confirmed' | 'Checked_In' | 'Ongoing' | 'Completed' | 'Cancelled' | 'No_Show'>('All');
   const [search, setSearch] = useState('');
   const [selectedApt, setSelectedApt] = useState<AppointmentItem | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
@@ -61,17 +61,26 @@ export const BookingsPage: React.FC = () => {
       const res = await api.getBookings();
       if (res?.data) {
         const mapped: AppointmentItem[] = res.data.map((b: any) => {
-          const cName = b.customer?.user?.full_name || 'Customer';
+          const cName =
+            b.customer?.user?.fullName ||
+            b.customer?.user?.full_name ||
+            b.customer?.fullName ||
+            b.customerName ||
+            'Customer';
           return {
             id: b.id,
-            bookingRef: b.booking_ref || `QA-${b.id.slice(0, 6)}`,
+            bookingRef: b.bookingRef || b.booking_ref || `QA-${b.id.slice(0, 6)}`,
             customerName: cName,
-            customerPhone: b.customer?.user?.phone || '',
+            customerPhone: b.customer?.user?.phone || b.customerPhone || '',
             customerInitial: cName.charAt(0).toUpperCase(),
-            serviceName: b.service?.name || 'Service',
-            providerName: b.provider?.business_name || 'Service Provider',
-            dateTime: `${b.date || 'Today'}, ${b.start_time || '10:00 AM'}`,
-            amount: b.total_amount || 0,
+            serviceName: b.service?.name || b.serviceName || 'Service',
+            providerName:
+              b.provider?.businessName ||
+              b.provider?.business_name ||
+              b.providerName ||
+              'Service Provider',
+            dateTime: `${b.date || 'Today'}, ${b.startTime || b.start_time || '10:00 AM'}`,
+            amount: b.totalAmount ?? b.total_amount ?? 0,
             status: (b.status || 'CONFIRMED').toUpperCase(),
           };
         });
@@ -88,9 +97,11 @@ export const BookingsPage: React.FC = () => {
   const totalAppointments = appointments.length;
   const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
   const confirmedCount = appointments.filter((a) => a.status === 'CONFIRMED').length;
+  const checkedInCount = appointments.filter((a) => a.status === 'CHECKED_IN').length;
   const ongoingCount = appointments.filter((a) => a.status === 'IN_PROGRESS' || a.status === 'ONGOING').length;
   const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
   const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
+  const noShowCount = appointments.filter((a) => a.status === 'NO_SHOW').length;
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
@@ -105,7 +116,13 @@ export const BookingsPage: React.FC = () => {
   };
 
   const filtered = appointments.filter((apt) => {
-    if (activeTab !== 'All' && apt.status !== activeTab.toUpperCase()) return false;
+    if (activeTab === 'Checked_In') {
+      if (apt.status !== 'CHECKED_IN') return false;
+    } else if (activeTab === 'No_Show') {
+      if (apt.status !== 'NO_SHOW') return false;
+    } else if (activeTab !== 'All' && apt.status !== activeTab.toUpperCase()) {
+      return false;
+    }
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -202,43 +219,66 @@ export const BookingsPage: React.FC = () => {
         <div className="flex items-center gap-1.5 p-1 bg-[#FAF9F5] rounded-2xl border border-slate-200/60 overflow-x-auto max-w-fit">
           <button
             onClick={() => setActiveTab('All')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'All'
-                ? 'bg-[#16A34A] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'All'
+              ? 'bg-[#16A34A] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             All Appointments ({totalAppointments})
           </button>
           <button
             onClick={() => setActiveTab('Confirmed')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'Confirmed'
-                ? 'bg-[#16A34A] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'Confirmed'
+              ? 'bg-[#16A34A] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Confirmed ({confirmedCount})
           </button>
           <button
+            onClick={() => setActiveTab('Checked_In')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'Checked_In'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            Checked In ({checkedInCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('Ongoing')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'Ongoing'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            In Service ({ongoingCount})
+          </button>
+          <button
             onClick={() => setActiveTab('Completed')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'Completed'
-                ? 'bg-[#16A34A] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'Completed'
+              ? 'bg-[#16A34A] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Completed ({completedCount})
           </button>
           <button
             onClick={() => setActiveTab('Cancelled')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'Cancelled'
-                ? 'bg-[#16A34A] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'Cancelled'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
           >
             Cancelled ({cancelledCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('No_Show')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'No_Show'
+              ? 'bg-slate-700 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            No Show ({noShowCount})
           </button>
         </div>
 
@@ -328,12 +368,24 @@ export const BookingsPage: React.FC = () => {
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                           Confirmed
                         </span>
+                      ) : apt.status === 'CHECKED_IN' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          Checked In
+                        </span>
+                      ) : apt.status === 'IN_PROGRESS' || apt.status === 'ONGOING' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          In Service
+                        </span>
                       ) : apt.status === 'CANCELLED' ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                           Cancelled
                         </span>
+                      ) : apt.status === 'NO_SHOW' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                          No Show
+                        </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200">
                           {apt.status}
                         </span>
                       )}
@@ -349,13 +401,29 @@ export const BookingsPage: React.FC = () => {
                         </button>
 
                         {openActionId === apt.id && (
-                          <div className="origin-top-right absolute right-0 mt-1 w-36 rounded-2xl shadow-xl bg-white border border-slate-100 py-1.5 z-20">
+                          <div className="origin-top-right absolute right-0 mt-1 w-44 rounded-2xl shadow-xl bg-white border border-slate-100 py-1.5 z-20">
+                            {apt.status === 'CONFIRMED' && (
+                              <button
+                                onClick={() => handleUpdateStatus(apt.id, 'CHECKED_IN')}
+                                className="w-full text-left px-3 py-1.5 text-xs text-purple-700 hover:bg-purple-50 font-semibold flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Verify Check-In</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => handleUpdateStatus(apt.id, 'COMPLETED')}
                               className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-[#EFF8E7] hover:text-[#16A34A] font-semibold flex items-center gap-1.5 cursor-pointer"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Mark Completed</span>
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(apt.id, 'NO_SHOW')}
+                              className="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 font-semibold flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Mark No Show</span>
                             </button>
                             <button
                               onClick={() => handleUpdateStatus(apt.id, 'CANCELLED')}

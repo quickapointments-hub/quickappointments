@@ -32,8 +32,8 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
   };
 
   const handleVerify = async () => {
-    if (otp.length !== 6) {
-      setError('Please enter the complete 6-digit Customer OTP');
+    if (otp.length < 4) {
+      setError('Please enter the customer Check-In Pass code');
       return;
     }
 
@@ -50,7 +50,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
         setLockedUntil(lockoutTime);
         setError('Too many incorrect attempts. Screen locked for 15 minutes for customer security.');
       } else {
-        setError(`Invalid verification OTP (${5 - newAttempts} attempts remaining)`);
+        setError(`Invalid Check-In code (${5 - newAttempts} attempts remaining)`);
       }
       setOtp('');
     } finally {
@@ -66,7 +66,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
           <div>
             <h3 className="font-bold text-sm text-[#111111] flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-[#65B32E]" />
-              <span>Verify & Complete Service</span>
+              <span>Customer In-Store Check-In</span>
             </h3>
             <p className="text-[11px] text-[#4B5563] font-mono">Ref: {booking.bookingRef}</p>
           </div>

@@ -157,14 +157,17 @@ class MobileApiClient {
     category?: string;
     city: string;
     address?: string;
+    latitude?: number;
+    longitude?: number;
     about?: string;
-    documents?: Array<{ documentType: string; documentNumber?: string; fileUrl: string }>;
+    documents?: Array<{ documentType: string; documentNumber?: string; fileUrl: string; fileName?: string }>;
     googleMapsLink?: string;
     premisePhotos?: Array<{ fileUrl: string; fileName?: string } | string>;
     workingDays?: string[];
     workingHoursFrom?: string;
     workingHoursTo?: string;
     serviceIds?: string[];
+    rate?: number | string;
   }) {
     const cleanPhone = (data.phone || '').replace(/\D/g, '');
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;

@@ -171,7 +171,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
         </button>
       </div>
 
-      {/* Sub-navigation Tabs: Categories | Catalog Services | Swiggy Rate Cards */}
+      {/* Sub-navigation Tabs: Categories | Catalog Services | Rate Cards */}
       <div className="flex items-center gap-2 p-1.5 bg-slate-100/80 rounded-2xl w-fit border border-slate-200/60 text-xs font-bold">
         <button
           type="button"
@@ -195,7 +195,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
             onClick={onNavigateToRateCards}
             className="px-4 py-2 rounded-xl text-slate-600 hover:text-[#16A34A] hover:bg-white/60 transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            <span>Provider Menu Approvals (Swiggy Flow)</span>
+            <span>Provider Menu Approvals</span>
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           </button>
         )}

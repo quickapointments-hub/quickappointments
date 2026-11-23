@@ -520,6 +520,10 @@ class ApiClient {
     return this.request('/admin/notifications');
   }
 
+  async getAdminRequestsFeed() {
+    return this.request('/admin/requests-feed');
+  }
+
   async broadcastNotification(payload: { title: string; body?: string; message?: string; audience?: string }) {
     return this.request('/admin/notifications/broadcast', {
       method: 'POST',

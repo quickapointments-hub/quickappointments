@@ -108,7 +108,7 @@ export const ProviderServicesScreen: React.FC<ProviderServicesScreenProps> = ({ 
         </button>
       </div>
 
-      {/* KPI Cards (Swiggy Partner Overview) */}
+      {/* KPI Cards (Partner Overview) */}
       <div className="p-4 grid grid-cols-3 gap-2">
         <div
           onClick={() => setActiveTab('APPROVED')}

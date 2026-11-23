@@ -37,10 +37,12 @@ export const SplashScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) =
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-[#FDFCF4] flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden transition-opacity duration-300 ${
+      onClick={() => onFinishRef.current()}
+      className={`fixed inset-0 z-50 bg-[#FDFCF4] flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden transition-opacity duration-300 cursor-pointer ${
         fadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       style={{ backgroundColor: '#FDFCF4' }}
+      title="Click to enter"
     >
       {/* Centered High-Resolution Official Quick Appointments Logo with standard mobile dimensions */}
       <div className="relative flex flex-col items-center justify-center my-auto z-10">

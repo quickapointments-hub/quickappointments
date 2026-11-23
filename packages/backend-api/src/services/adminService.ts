@@ -174,6 +174,8 @@ export class AdminService {
 
     return {
       ...hydratedProvider,
+      profile: hydratedProvider,
+      services: hydratedProvider?.customServices || [],
       branches,
       staff,
       earningsSummary: {
@@ -925,5 +927,129 @@ export class AdminService {
       }
     }
     return Array.from(seen.values());
+  }
+
+  static async getRequestsFeed() {
+    const [providers, rates, refunds, bookings, tickets] = await Promise.all([
+      this.getProviders('PENDING').catch(() => []),
+      this.getPendingRates().catch(() => []),
+      this.getRefunds().catch(() => []),
+      this.getAllBookings('PENDING').catch(() => []),
+      this.getSupportTickets('OPEN').catch(() => []),
+    ]);
+
+    const notifications: Array<{
+      id: string;
+      type: 'PROVIDER' | 'CUSTOMER';
+      category: 'KYC' | 'RATE_CARD' | 'BOOKING' | 'REFUND' | 'SUPPORT' | 'PAYOUT';
+      title: string;
+      summary: string;
+      targetTab: string;
+      actionLabel: string;
+      timestamp: string;
+      priority: 'HIGH' | 'NORMAL';
+      badge?: string;
+    }> = [];
+
+    // 1. Pending Provider KYC submissions (Provider Requests)
+    for (const p of ((providers || []) as any[]).slice(0, 10)) {
+      if (!p) continue;
+      notifications.push({
+        id: `kyc-${p.id}`,
+        type: 'PROVIDER',
+        category: 'KYC',
+        title: `KYC Review: ${p.businessName || p.user?.fullName || 'Partner Onboarding'}`,
+        summary: `Verification documents submitted for ${p.categoryName || p.businessName || 'Service'}. Awaiting Admin approval.`,
+        targetTab: 'verification',
+        actionLabel: 'Review Documents',
+        timestamp: p.createdAt || new Date().toISOString(),
+        priority: 'HIGH',
+        badge: 'Pending KYC',
+      });
+    }
+
+    // 2. Pending Provider Custom Rate Cards / Menus (Provider Requirements)
+    for (const r of ((rates || []) as any[]).slice(0, 10)) {
+      if (!r) continue;
+      notifications.push({
+        id: `rate-${r.id}`,
+        type: 'PROVIDER',
+        category: 'RATE_CARD',
+        title: `Custom Rate Proposal: ${r.service?.name || 'Service Rate Card'}`,
+        summary: `${r.provider?.businessName || 'Provider'} requested custom pricing of ₹${r.custom_price || r.price}.`,
+        targetTab: 'rate_cards',
+        actionLabel: 'Approve Rates',
+        timestamp: r.created_at || new Date().toISOString(),
+        priority: 'NORMAL',
+        badge: 'Rate Card',
+      });
+    }
+
+    // 3. Pending Customer 100% Refund Requests (Customer Requests)
+    for (const rf of ((refunds || []) as any[]).slice(0, 10)) {
+      if (!rf) continue;
+      notifications.push({
+        id: `refund-${rf.id || rf.bookingId || Math.random().toString(36).substring(2, 7)}`,
+        type: 'CUSTOMER',
+        category: 'REFUND',
+        title: `100% Refund Request: Booking #${rf.booking_ref || (rf.id ? String(rf.id).slice(0, 6) : 'REF')}`,
+        summary: `Customer requested refund of ₹${rf.amount || rf.total_amount || 0} within 48h SLA guarantee.`,
+        targetTab: 'refunds',
+        actionLabel: 'Process Refund',
+        timestamp: rf.created_at || rf.timestamp || new Date().toISOString(),
+        priority: 'HIGH',
+        badge: '48h SLA',
+      });
+    }
+
+    // 4. Pending Customer Bookings (Customer Requests)
+    for (const b of ((bookings || []) as any[]).slice(0, 10)) {
+      if (!b) continue;
+      notifications.push({
+        id: `booking-${b.id}`,
+        type: 'CUSTOMER',
+        category: 'BOOKING',
+        title: `New Booking Request: #${b.bookingRef || String(b.id).slice(0, 6)}`,
+        summary: `${b.service?.name || 'Service'} booked by ${b.customer?.fullName || 'Customer'} for ${b.date || 'upcoming'}.`,
+        targetTab: 'bookings',
+        actionLabel: 'Inspect Booking',
+        timestamp: b.createdAt || new Date().toISOString(),
+        priority: 'NORMAL',
+        badge: 'New Booking',
+      });
+    }
+
+    // 5. Customer & Provider Support Inquiries & Requirements
+    for (const t of ((tickets || []) as any[]).slice(0, 10)) {
+      if (!t) continue;
+      const isProvider = t.user?.role === 'PROVIDER' || t.raisedByRole === 'PROVIDER';
+      notifications.push({
+        id: `ticket-${t.id}`,
+        type: isProvider ? 'PROVIDER' : 'CUSTOMER',
+        category: 'SUPPORT',
+        title: `${isProvider ? 'Provider Requirement' : 'Customer Request'}: ${t.subject || 'Support Ticket'}`,
+        summary: t.description || t.category || 'Assistance requested with booking or account requirements.',
+        targetTab: 'support',
+        actionLabel: 'Open Ticket',
+        timestamp: t.created_at || t.createdAt || new Date().toISOString(),
+        priority: t.priority === 'HIGH' ? 'HIGH' : 'NORMAL',
+        badge: isProvider ? 'Partner Desk' : 'Customer Desk',
+      });
+    }
+
+    // Sort descending by timestamp
+    notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const providerCount = notifications.filter((n) => n.type === 'PROVIDER').length;
+    const customerCount = notifications.filter((n) => n.type === 'CUSTOMER').length;
+
+    return {
+      notifications,
+      counts: {
+        total: notifications.length,
+        providers: providerCount,
+        customers: customerCount,
+      },
+    };
   }
 }

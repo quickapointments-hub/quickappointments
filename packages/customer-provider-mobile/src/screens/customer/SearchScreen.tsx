@@ -394,8 +394,20 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         /* Live Search Results View (Clean, No Ratings) */
         <div className="px-5 space-y-4 flex-1">
           {loading ? (
-            <div className="py-12 text-center text-xs text-[#6B7280]">
-              Searching for "{query}"...
+            <div className="space-y-3 pt-2">
+              <div className="h-4 bg-slate-200/70 rounded w-28 animate-pulse" />
+              {[1, 2, 3, 4].map((n) => (
+                <div
+                  key={n}
+                  className="p-3.5 rounded-2xl bg-white border border-[#E8E4D9] animate-pulse flex items-center justify-between gap-3"
+                >
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="h-3.5 bg-slate-200/70 rounded w-3/4" />
+                    <div className="h-2.5 bg-slate-200/50 rounded w-1/3" />
+                  </div>
+                  <div className="w-16 h-7 bg-slate-200/60 rounded-full shrink-0" />
+                </div>
+              ))}
             </div>
           ) : services.length === 0 && providers.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-3xl border border-[#E8E4D9] space-y-2">

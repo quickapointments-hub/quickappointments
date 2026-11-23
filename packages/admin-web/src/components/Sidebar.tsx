@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'providers', label: 'Service Providers', icon: Briefcase, badge: pendingKycCount > 0 ? pendingKycCount : undefined },
     { id: 'catalog', label: 'Categories', icon: FolderTree },
     { id: 'services', label: 'Services', icon: Wrench },
-    { id: 'rate_cards', label: 'Rate Cards (Swiggy)', icon: Tag },
+    { id: 'rate_cards', label: 'Rate Cards', icon: Tag },
     { id: 'bookings', label: 'Appointments', icon: CalendarCheck },
     { id: 'locations', label: 'Locations', icon: MapPin },
     { id: 'finance', label: 'Finance & Payments', icon: CreditCard },

@@ -103,7 +103,7 @@ export const ProviderProfileScreen: React.FC<{
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Layers className="w-4 h-4 text-[#65B32E]" />
               <div>
-                <span className="block font-bold">My Services & Menu (Swiggy Partner)</span>
+                <span className="block font-bold">My Services & Menu</span>
                 <span className="text-[10px] text-[#4B5563] font-normal">Add custom services, costs & view Admin approvals</span>
               </div>
             </div>

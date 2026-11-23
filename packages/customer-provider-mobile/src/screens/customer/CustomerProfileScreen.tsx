@@ -139,6 +139,29 @@ export const CustomerProfileScreen: React.FC<{
         </div>
       </div>
 
+      {/* Register Business / Become a Provider Card (Master Specification Section 3) */}
+      <div className="p-5 rounded-3xl bg-gradient-to-br from-[#16A34A] to-[#15803D] text-white shadow-md space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-xs">
+            Business Partner
+          </span>
+          <span className="text-xs font-bold text-white/90">Zero Setup Fee</span>
+        </div>
+        <div>
+          <h3 className="text-sm font-black text-white">Register Your Business</h3>
+          <p className="text-xs text-white/90 leading-relaxed mt-1">
+            Own a salon, clinic, coaching academy, fitness center, or studio? Join Quick Appointments and manage physical in-person appointments.
+          </p>
+        </div>
+        <button
+          onClick={() => switchRole('PROVIDER')}
+          className="w-full py-2.5 rounded-xl bg-white text-[#15803D] font-extrabold text-xs shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+        >
+          <span>Become a Provider / Register Business</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
       {/* Multi-Role Switcher Card */}
       <div className="p-5 rounded-3xl bg-white text-[#111111] shadow-sm border border-[#E8E4D9] space-y-3">
         <div className="flex items-center justify-between">
@@ -152,8 +175,7 @@ export const CustomerProfileScreen: React.FC<{
         </div>
 
         <p className="text-xs text-[#4B5563] leading-relaxed font-medium">
-          Are you a certified specialist or salon/clinic owner? Switch to Provider Mode to manage
-          bookings, configure working hours, and review earnings.
+          Already registered a business? Switch instantly between Customer booking mode and Provider business cockpit without logging out.
         </p>
 
         <button
