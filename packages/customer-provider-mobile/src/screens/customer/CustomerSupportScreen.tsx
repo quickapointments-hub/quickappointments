@@ -100,7 +100,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
       case 'OPEN':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF8E7] text-[#111111] border border-[#65B32E]">Open</span>;
       case 'IN_REVIEW':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF8F0] text-[#111111] border border-[#E8E4D9]">In Review</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFFFFF] text-[#111111] border border-[#E8E4D9]">In Review</span>;
       case 'RESOLVED':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF8E7] text-[#65B32E] border border-[#65B32E]">Resolved</span>;
       default:
@@ -109,14 +109,14 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
   };
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FFFFFF] text-[#111111] min-h-full">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-1.5 rounded-xl bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FAF8F0] shadow-sm cursor-pointer"
+              className="p-1.5 rounded-xl bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FFFFFF] shadow-sm cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -179,7 +179,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-[#4B5563] pt-1 border-t border-[#F2EFE8]">
-                <span className="px-2 py-0.5 rounded-md bg-[#FAF8F0] border border-[#E8E4D9] font-bold text-[10px] text-[#111111]">
+                <span className="px-2 py-0.5 rounded-md bg-[#FFFFFF] border border-[#E8E4D9] font-bold text-[10px] text-[#111111]">
                   {t.category}
                 </span>
                 <span className="flex items-center gap-1 font-mono text-[10px] text-[#6B7280]">
@@ -195,7 +195,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
       {/* New Ticket Modal */}
       {showNewModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#FDFCF4] w-full max-w-sm rounded-3xl p-5 shadow-2xl border border-[#E8E4D9] space-y-4">
+          <div className="bg-[#FFFFFF] w-full max-w-sm rounded-3xl p-5 shadow-2xl border border-[#E8E4D9] space-y-4">
             <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
               <h3 className="font-bold text-sm text-[#111111]">Raise Support Ticket</h3>
               <button
@@ -254,7 +254,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
                 <button
                   type="button"
                   onClick={() => setShowNewModal(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[#4B5563] hover:bg-[#FAF8F0]"
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[#4B5563] hover:bg-[#FFFFFF]"
                 >
                   Cancel
                 </button>
@@ -274,7 +274,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
       {/* Ticket Details & Chat Modal */}
       {activeTicket && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#FDFCF4] w-full max-w-sm rounded-3xl h-[520px] flex flex-col shadow-2xl border border-[#E8E4D9] overflow-hidden">
+          <div className="bg-[#FFFFFF] w-full max-w-sm rounded-3xl h-[520px] flex flex-col shadow-2xl border border-[#E8E4D9] overflow-hidden">
             <div className="p-4 border-b border-[#E8E4D9] flex items-center justify-between bg-white">
               <div>
                 <span className="font-mono text-[10px] font-bold text-[#6B7280]">
@@ -288,7 +288,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
                 {getStatusBadge(activeTicket.status)}
                 <button
                   onClick={() => setActiveTicket(null)}
-                  className="w-7 h-7 rounded-full bg-[#FAF8F0] border border-[#E8E4D9] flex items-center justify-center text-[#4B5563]"
+                  className="w-7 h-7 rounded-full bg-[#FFFFFF] border border-[#E8E4D9] flex items-center justify-center text-[#4B5563]"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -296,7 +296,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
             </div>
 
             {/* Conversation Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FDFCF4]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FFFFFF]">
               {activeTicket.resolution && (
                 <div className="p-3 rounded-2xl bg-[#EFF8E7] border border-[#65B32E] text-xs text-[#111111] space-y-1">
                   <span className="font-bold flex items-center gap-1 text-[11px] text-[#65B32E]">
@@ -339,7 +339,7 @@ export const CustomerSupportScreen: React.FC<CustomerSupportScreenProps> = ({ on
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendReply()}
-                className="flex-1 bg-[#FAF8F0] px-3.5 py-2 rounded-xl text-xs text-[#111111] border border-[#DCD8C8] outline-none focus:bg-white focus:border-[#65B32E]"
+                className="flex-1 bg-[#FFFFFF] px-3.5 py-2 rounded-xl text-xs text-[#111111] border border-[#DCD8C8] outline-none focus:bg-white focus:border-[#65B32E]"
               />
               <button
                 onClick={handleSendReply}

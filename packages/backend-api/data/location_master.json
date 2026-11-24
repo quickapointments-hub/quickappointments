@@ -1,0 +1,57 @@
+[
+  {
+    "id": "loc-1795512411531-tdlqh",
+    "country": "India",
+    "state": "Telangana",
+    "city": "Hyderabad",
+    "district": "Rangareddy",
+    "pincode": "500082",
+    "is_active": true,
+    "created_at": "2026-11-24T09:26:51.529Z",
+    "updated_at": "2026-11-24T09:26:51.529Z"
+  },
+  {
+    "id": "loc-1795508125782-gw4z3",
+    "country": "India",
+    "state": "Telangana",
+    "city": "Hyderabad",
+    "district": "Rangareddy",
+    "pincode": "500081",
+    "is_active": true,
+    "created_at": "2026-11-24T08:15:25.780Z",
+    "updated_at": "2026-11-24T08:15:25.807Z"
+  },
+  {
+    "id": "loc-1795508147760-9xnqi",
+    "country": "India",
+    "state": "Telangana",
+    "city": "Hyderabad",
+    "district": "Rangareddy",
+    "pincode": "500032",
+    "is_active": true,
+    "created_at": "2026-11-24T08:15:47.758Z",
+    "updated_at": "2026-11-24T08:15:47.758Z"
+  },
+  {
+    "id": "loc-1795508147760-2zksp",
+    "country": "India",
+    "state": "Telangana",
+    "city": "Warangal",
+    "district": "Warangal Urban",
+    "pincode": "506001",
+    "is_active": true,
+    "created_at": "2026-11-24T08:15:47.758Z",
+    "updated_at": "2026-11-24T08:15:47.758Z"
+  },
+  {
+    "id": "loc-1795508147760-69s7q",
+    "country": "India",
+    "state": "Karnataka",
+    "city": "Bangalore",
+    "district": "Bangalore Urban",
+    "pincode": "560001",
+    "is_active": false,
+    "created_at": "2026-11-24T08:15:47.758Z",
+    "updated_at": "2026-11-24T08:15:47.758Z"
+  }
+]

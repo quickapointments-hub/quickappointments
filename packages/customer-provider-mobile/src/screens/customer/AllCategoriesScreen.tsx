@@ -138,7 +138,7 @@ export const AllCategoriesScreen: React.FC<AllCategoriesScreenProps> = ({
   );
 
   return (
-    <div className="pb-24 min-h-full bg-[#FDFCF4] text-[#111111]">
+    <div className="pb-24 min-h-full bg-[#FFFFFF] text-[#111111]">
       {/* 1. Top Bar with Logo and Location Pill (Matching Reference Image 2) */}
       <div className="px-5 pt-4 pb-2 flex items-center justify-between">
         <QuickAppointmentsLogo />
@@ -191,7 +191,7 @@ export const AllCategoriesScreen: React.FC<AllCategoriesScreenProps> = ({
       <div className="px-5 pt-3 pb-3 flex items-start gap-3">
         <button
           onClick={onBack}
-          className="mt-1 w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FAF8F0] cursor-pointer shrink-0 shadow-xs transition-colors"
+          className="mt-1 w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FFFFFF] cursor-pointer shrink-0 shadow-xs transition-colors"
           aria-label="Back"
         >
           <ArrowLeft className="w-4 h-4 stroke-[2.2]" />

@@ -49,7 +49,7 @@ export const OffersCouponsModal: React.FC<OffersCouponsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-xs animate-fadeIn">
-      <div className="bg-[#FDFCF4] w-full max-w-md rounded-t-[32px] sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9]">
+      <div className="bg-[#FFFFFF] w-full max-w-md rounded-t-[32px] sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9]">
         {/* Header */}
         <div className="p-4 px-5 border-b border-[#E8E4D9] flex items-center justify-between bg-white">
           <div className="flex items-center gap-2.5">
@@ -63,7 +63,7 @@ export const OffersCouponsModal: React.FC<OffersCouponsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#FAF8F0] border border-[#E8E4D9] flex items-center justify-center text-[#4B5563] hover:text-black cursor-pointer"
+            className="w-8 h-8 rounded-full bg-[#FFFFFF] border border-[#E8E4D9] flex items-center justify-center text-[#4B5563] hover:text-black cursor-pointer"
           >
             ✕
           </button>

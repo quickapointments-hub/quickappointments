@@ -330,13 +330,13 @@ export const CategoryProvidersScreen: React.FC<CategoryProvidersScreenProps> = (
   };
 
   return (
-    <div className="pb-24 space-y-4 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 space-y-4 bg-[#FFFFFF] text-[#111111] min-h-full">
       {/* 1. Header (Matching Reference Image 1) */}
-      <div className="sticky top-0 z-30 bg-[#FDFCF4]/95 backdrop-blur-md border-b border-[#E8E4D9] px-5 py-3.5 flex items-center justify-between">
+      <div className="sticky top-0 z-30 bg-[#FFFFFF]/95 backdrop-blur-md border-b border-[#E8E4D9] px-5 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FAF8F0] transition-colors cursor-pointer shadow-2xs"
+            className="w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FFFFFF] transition-colors cursor-pointer shadow-2xs"
             aria-label="Back"
           >
             <ArrowLeft className="w-4 h-4 stroke-[2.2]" />
@@ -363,7 +363,7 @@ export const CategoryProvidersScreen: React.FC<CategoryProvidersScreenProps> = (
               if (onOpenSearch) onOpenSearch();
               else setShowSearchInput((prev) => !prev);
             }}
-            className="w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FAF8F0] transition-colors cursor-pointer shadow-2xs"
+            className="w-8 h-8 rounded-full bg-white border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FFFFFF] transition-colors cursor-pointer shadow-2xs"
             aria-label="Search"
           >
             <Search className="w-4 h-4 text-[#111111]" />
@@ -547,7 +547,7 @@ export const CategoryProvidersScreen: React.FC<CategoryProvidersScreenProps> = (
       {/* VIEW ALL SERVICES MODAL */}
       {showAllServicesModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="bg-[#FDFCF4] w-full max-w-lg rounded-t-[32px] sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9]">
+          <div className="bg-[#FFFFFF] w-full max-w-lg rounded-t-[32px] sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9]">
             <div className="p-4 px-5 border-b border-[#E8E4D9] flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm text-[#111111]">All {category.name || 'Beauty & Salon'} Services</h3>

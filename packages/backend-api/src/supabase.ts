@@ -20,13 +20,7 @@ function slugify(input: string): string {
     .replace(/^-|-$/g, '') || `item-${Date.now()}`;
 }
 
-const DEFAULT_CITY_PINCODES: Record<string, string> = {
-  'Warangal': '506001, 506002, 506003, 506004, 506009',
-  'Hyderabad': '500001, 500002, 500003, 500016, 500032, 500034, 500081, 500084, 500090',
-  'Bengaluru': '560001, 560002, 560004, 560034, 560038, 560066, 560100',
-  'Delhi': '110001, 110002, 110003, 110005, 110016, 110020, 110075',
-};
-
+// Clean location mapping - admin configured only, zero hardcoded PIN codes
 async function getPincodesMap(): Promise<Record<string, string>> {
   try {
     const setting = await SupabaseDb.selectOne<any>(
@@ -36,11 +30,11 @@ async function getPincodesMap(): Promise<Record<string, string>> {
     if (setting?.value) {
       const parsed = typeof setting.value === 'string' ? JSON.parse(setting.value) : setting.value;
       if (parsed && typeof parsed === 'object') {
-        return { ...DEFAULT_CITY_PINCODES, ...parsed };
+        return { ...parsed };
       }
     }
   } catch { }
-  return { ...DEFAULT_CITY_PINCODES };
+  return {};
 }
 
 async function savePincodesMap(map: Record<string, string>) {
@@ -187,23 +181,68 @@ export class SupabaseStorageService {
 
   static async getCities(activeOnly = false) {
     const filter = activeOnly ? 'select=*&is_active=eq.true&order=name.asc' : 'select=*&order=name.asc';
-    const [cities, pincodesMap] = await Promise.all([
-      SupabaseDb.select<any>('cities', filter),
-      getPincodesMap(),
-    ]);
+    let cities: any[] = [];
+    let pincodesMap: Record<string, string> = {};
+    try {
+      const [fetchedCities, fetchedMap] = await Promise.all([
+        SupabaseDb.select<any>('cities', filter),
+        getPincodesMap(),
+      ]);
+      cities = fetchedCities || [];
+      pincodesMap = fetchedMap || {};
+    } catch {
+      cities = [];
+    }
 
-    return cities.map((c) => {
+    // Also load locations from location_master to enrich cities and pincodes
+    let masterLocs: any[] = [];
+    try {
+      masterLocs = await SupabaseDb.select<any>(
+        'location_master',
+        activeOnly ? 'select=*&is_active=eq.true' : 'select=*'
+      );
+    } catch {}
+
+    const resultMap: Map<string, any> = new Map();
+
+    for (const c of cities) {
       const cityPinStr = c.pincodes || pincodesMap[c.name] || pincodesMap[c.id] || '';
       const list = String(cityPinStr)
         .split(',')
         .map((p) => p.trim())
         .filter(Boolean);
-      return {
+      resultMap.set(c.name.toLowerCase(), {
         ...c,
         pincodes: cityPinStr,
         pincodeList: list,
-      };
-    });
+      });
+    }
+
+    // Merge location_master entries into cities
+    for (const loc of masterLocs) {
+      const key = loc.city?.toLowerCase();
+      if (!key) continue;
+      const existing = resultMap.get(key);
+      if (existing) {
+        if (!existing.pincodeList.includes(loc.pincode)) {
+          existing.pincodeList.push(loc.pincode);
+          existing.pincodes = existing.pincodeList.join(', ');
+        }
+      } else {
+        resultMap.set(key, {
+          id: loc.id,
+          name: loc.city,
+          state: loc.state,
+          district: loc.district,
+          country: loc.country || 'India',
+          is_active: loc.is_active,
+          pincodes: loc.pincode,
+          pincodeList: [loc.pincode],
+        });
+      }
+    }
+
+    return Array.from(resultMap.values());
   }
 
   static async addCity(payload: {

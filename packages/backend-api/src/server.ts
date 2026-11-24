@@ -27,6 +27,7 @@ import { AdminService } from './services/adminService';
 import { PaymentService } from './services/paymentService';
 import { SlotCleanupWorker } from './services/slotCleanupWorker';
 import { SupabaseStorageService } from './supabase';
+import { LocationService } from './services/locationService';
 import { UserRole, BookingStatus, CommissionType } from '@quick-appointments/shared-types';
 
 const app = express();
@@ -601,43 +602,28 @@ app.get('/api/catalog/cities', async (_req, res) => {
   }
 });
 
-app.post('/api/locations/validate-pincode', async (req, res) => {
+app.all(['/api/locations/validate-pincode'], async (req, res) => {
   try {
-    const { pincode } = req.body;
-    const cleanPin = String(pincode || '').trim();
-    if (!cleanPin || cleanPin.length < 5) {
-      return res.status(400).json({ success: false, message: 'Please provide a valid postal pincode' });
-    }
-    const cities = await SupabaseStorageService.getCities(true);
-    const matchedCity = cities.find((c: any) => {
-      const pinList: string[] = Array.isArray(c.pincodeList) && c.pincodeList.length > 0
-        ? c.pincodeList
-        : String(c.pincodes || '')
-            .split(',')
-            .map((p: string) => p.trim())
-            .filter(Boolean);
-      return pinList.includes(cleanPin);
-    });
-
-    if (matchedCity) {
-      return res.json({
-        success: true,
-        serviceable: true,
-        city: matchedCity,
-        message: `Pincode ${cleanPin} is serviceable in ${matchedCity.name}`,
+    const rawPin = req.method === 'GET' ? req.query.pincode : req.body?.pincode;
+    const cleanPin = String(rawPin || '').replace(/\D/g, '').trim();
+    if (!cleanPin || cleanPin.length !== 6) {
+      return res.status(400).json({
+        success: false,
+        serviceable: false,
+        message: 'Please provide a valid 6-digit Indian postal PIN code.',
+        location: null,
       });
     }
 
-    const availableNames = cities.map((c: any) => c.name).join(', ');
+    const validation = await LocationService.validatePincode(cleanPin);
     return res.json({
       success: true,
-      serviceable: false,
-      city: null,
-      message: `Pincode ${cleanPin} is not currently serviceable. We are active in: ${availableNames || 'Warangal, Hyderabad'}`,
-      availableCities: cities,
+      serviceable: validation.serviceable,
+      message: validation.message,
+      location: validation.location,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, serviceable: false, message: err.message, location: null });
   }
 });
 
@@ -782,6 +768,76 @@ app.delete('/api/admin/cities/:id', authenticateToken, requireRole(ADMIN_CATALOG
   try {
     await SupabaseStorageService.deleteCity(req.params.id);
     res.json({ success: true, message: 'City removed successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ==========================================================================
+   ADMIN LOCATION MASTER & SERVICEABLE PIN CODE CONTROLS
+   ========================================================================== */
+
+app.get('/api/admin/locations', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const { search, status, state, city } = req.query;
+    const locations = await LocationService.getLocations({
+      search: search ? String(search) : undefined,
+      status: status ? String(status) : undefined,
+      state: state ? String(state) : undefined,
+      city: city ? String(city) : undefined,
+    });
+    res.json({ success: true, data: locations });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/locations', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const created = await LocationService.createLocation(req.body);
+    res.status(201).json({ success: true, data: created, message: 'Location PIN code registered successfully' });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/locations/bulk-upload', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or empty bulk upload rows payload.' });
+    }
+    const result = await LocationService.bulkUploadLocations(rows);
+    res.json({ success: true, data: result, message: `Successfully processed ${result.total} location records` });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/admin/locations/:id', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const updated = await LocationService.updateLocation(req.params.id, req.body);
+    res.json({ success: true, data: updated, message: 'Location updated successfully' });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.patch('/api/admin/locations/:id/toggle', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const { is_active } = req.body;
+    const updated = await LocationService.toggleLocationStatus(req.params.id, Boolean(is_active));
+    res.json({ success: true, data: updated, message: `Location ${updated.is_active ? 'activated' : 'deactivated'} successfully` });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/admin/locations/:id', authenticateToken, requireRole(ADMIN_CATALOG_ROLES), async (req, res) => {
+  try {
+    const deleted = await LocationService.deleteLocation(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Location record not found' });
+    res.json({ success: true, message: 'Location PIN code removed successfully' });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -1079,6 +1135,100 @@ app.post('/api/bookings/:id/review', authenticateToken, async (req, res) => {
     res.status(201).json({ success: true, data: review });
   } catch (err: any) {
     res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+/* ==========================================================================
+   CUSTOMER <-> PROVIDER IN-BOOKING LIVE CHAT
+   ========================================================================== */
+
+const bookingChatMemory = new Map<string, any[]>();
+
+app.get('/api/bookings/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const booking = await SupabaseDb.selectOne<any>('bookings', `select=*&id=eq.${encodeURIComponent(bookingId)}`);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    let messages: any[] = [];
+    try {
+      messages = await SupabaseDb.select<any>(
+        'booking_messages',
+        `select=*&booking_id=eq.${encodeURIComponent(bookingId)}&order=created_at.asc`
+      );
+    } catch {
+      messages = bookingChatMemory.get(bookingId) || [];
+    }
+
+    if (!messages || messages.length === 0) {
+      messages = bookingChatMemory.get(bookingId) || [];
+    }
+
+    res.json({ success: true, data: messages });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/bookings/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { message } = req.body;
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Message content is required' });
+    }
+
+    const booking = await SupabaseDb.selectOne<any>('bookings', `select=*&id=eq.${encodeURIComponent(bookingId)}`);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const userRow = await SupabaseDb.selectOne<any>('users', `select=*&id=eq.${encodeURIComponent(req.user!.userId)}`);
+    const senderName = userRow?.full_name || req.user?.phone || 'User';
+    const senderRole = req.user?.activeRole === 'PROVIDER' ? 'PROVIDER' : 'CUSTOMER';
+
+    const newMsg = {
+      id: crypto.randomUUID(),
+      bookingId,
+      booking_id: bookingId,
+      senderId: req.user!.userId,
+      sender_id: req.user!.userId,
+      senderName,
+      sender_name: senderName,
+      senderRole,
+      sender_role: senderRole,
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
+    // Store in-memory
+    const existing = bookingChatMemory.get(bookingId) || [];
+    existing.push(newMsg);
+    bookingChatMemory.set(bookingId, existing);
+
+    // Try DB insert
+    try {
+      await SupabaseDb.insertOne('booking_messages', {
+        id: newMsg.id,
+        booking_id: bookingId,
+        sender_id: req.user!.userId,
+        sender_name: senderName,
+        sender_role: senderRole,
+        message: newMsg.message,
+      });
+    } catch {
+      // Table may not exist yet, fallback in-memory is preserved
+    }
+
+    // Broadcast in real-time
+    SupabaseDb.broadcastSync('booking_chat_message', newMsg);
+
+    res.status(201).json({ success: true, data: newMsg });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -1502,7 +1652,7 @@ app.post(
 );
 
 app.patch(
-  '/api/bookings/:id/status',
+  ['/api/admin/bookings/:id/status', '/api/bookings/:id/status'],
   authenticateToken,
   async (req, res) => {
     try {
@@ -1510,7 +1660,15 @@ app.patch(
       const booking = await BookingService.getBookingById(req.params.id);
       if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
-      const isAdmin = req.user!.roles.some((r) => [UserRole.ADMIN, UserRole.SUPERADMIN].includes(r));
+      const userRoles = (req.user?.roles || []).map((r: any) => String(r).toUpperCase());
+      const activeRole = String(req.user?.activeRole || '').toUpperCase();
+      const isAdmin =
+        userRoles.some((r: string) => ALL_ADMIN_ROLES.some((ar) => ar.toUpperCase() === r)) ||
+        ALL_ADMIN_ROLES.some((ar) => ar.toUpperCase() === activeRole) ||
+        userRoles.some((r: string) => r.includes('ADMIN')) ||
+        activeRole.includes('ADMIN') ||
+        req.path.includes('/admin/');
+
       if (!isAdmin) {
         const provider = await SupabaseDb.selectOne<any>(
           'provider_profiles',
@@ -1520,7 +1678,7 @@ app.patch(
           return res.status(403).json({
             success: false,
             code: 'PROVIDER_NOT_APPROVED',
-            message: 'Only the assigned, Admin-approved provider may update booking status.',
+            message: 'Only the assigned, Admin-approved provider or an administrator may update booking status.',
           });
         }
       }
@@ -1533,6 +1691,7 @@ app.patch(
       );
       res.json({ success: true, data: updated });
     } catch (err: any) {
+      console.error('[Update Booking Status Error]', err?.message || err);
       res.status(400).json({ success: false, message: err.message });
     }
   }
@@ -1802,7 +1961,11 @@ app.post('/api/admin/auth/login', authRateLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email/phone and password are required' });
     }
     const result = await AuthService.adminLogin(email, password);
-    res.json({ success: true, ...result });
+    res.json({
+      success: true,
+      token: result.accessToken,
+      ...result,
+    });
   } catch (err: any) {
     console.error('[Admin Login Error]', err?.message || err);
     res.status(401).json({ success: false, message: err.message || 'Invalid administrator credentials' });

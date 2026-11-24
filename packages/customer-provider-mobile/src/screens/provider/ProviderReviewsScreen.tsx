@@ -38,12 +38,12 @@ export const ProviderReviewsScreen: React.FC<ProviderReviewsScreenProps> = ({ on
     : '4.9';
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FFFFFF] text-[#111111] min-h-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
           onClick={onBack}
-          className="p-1.5 rounded-xl bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FAF8F0] shadow-sm cursor-pointer"
+          className="p-1.5 rounded-xl bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FFFFFF] shadow-sm cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -131,7 +131,7 @@ export const ProviderReviewsScreen: React.FC<ProviderReviewsScreenProps> = ({ on
                     {tags.map((tag: string) => (
                       <span
                         key={tag}
-                        className="px-2 py-0.5 rounded-md bg-[#FAF8F0] border border-[#E8E4D9] text-[#111111] font-bold text-[10px]"
+                        className="px-2 py-0.5 rounded-md bg-[#FFFFFF] border border-[#E8E4D9] text-[#111111] font-bold text-[10px]"
                       >
                         {tag}
                       </span>

@@ -105,7 +105,7 @@ export const ProviderKycStatusScreen: React.FC<ProviderKycStatusScreenProps> = (
   const needsInfo = currentStatus === 'NEEDS_INFO';
 
   return (
-    <div className="pb-24 px-5 pt-6 space-y-5 bg-[#FDFCF4] min-h-full">
+    <div className="pb-24 px-5 pt-6 space-y-5 bg-[#FFFFFF] min-h-full">
       <div className="text-center space-y-1">
         <span className="text-[10px] font-bold text-[#65B32E] uppercase tracking-wider">
           Provider Verification Gate

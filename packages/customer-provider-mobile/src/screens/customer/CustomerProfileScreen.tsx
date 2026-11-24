@@ -117,7 +117,7 @@ export const CustomerProfileScreen: React.FC<{
     languages[0] || { code: 'en', name: 'English', nativeName: 'English' };
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FFFFFF] text-[#111111] min-h-full">
       <div>
         <h2 className="text-lg font-black font-display text-[#111111] tracking-tight">
           {t('profile')}
@@ -192,7 +192,7 @@ export const CustomerProfileScreen: React.FC<{
         {/* Wallet & Balance */}
         <div
           onClick={onOpenWallet}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Wallet className="w-4 h-4 text-[#65B32E]" />
@@ -209,7 +209,7 @@ export const CustomerProfileScreen: React.FC<{
         {/* Transaction History & Invoices */}
         <div
           onClick={onOpenTransactions}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Receipt className="w-4 h-4 text-[#65B32E]" />
@@ -221,7 +221,7 @@ export const CustomerProfileScreen: React.FC<{
         {/* Offers & Discount Coupons */}
         <div
           onClick={onOpenOffers}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Tag className="w-4 h-4 text-[#65B32E]" />
@@ -238,7 +238,7 @@ export const CustomerProfileScreen: React.FC<{
         {/* Language Selection Option */}
         <div
           onClick={() => setShowLanguageModal(true)}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Globe className="w-4 h-4 text-[#65B32E]" />
@@ -254,7 +254,7 @@ export const CustomerProfileScreen: React.FC<{
 
         <div
           onClick={() => setShowEditProfile(true)}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Edit3 className="w-4 h-4 text-[#65B32E]" />
@@ -265,7 +265,7 @@ export const CustomerProfileScreen: React.FC<{
 
         <div
           onClick={() => setShowAddresses(true)}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <MapPin className="w-4 h-4 text-[#65B32E]" />
@@ -276,7 +276,7 @@ export const CustomerProfileScreen: React.FC<{
 
         <div
           onClick={onOpenFaqs}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <FaqIcon className="w-4 h-4 text-[#65B32E]" />
@@ -287,7 +287,7 @@ export const CustomerProfileScreen: React.FC<{
 
         <div
           onClick={() => setShowSettings(true)}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Settings className="w-4 h-4 text-[#65B32E]" />
@@ -298,7 +298,7 @@ export const CustomerProfileScreen: React.FC<{
 
         <div
           onClick={onOpenSupport}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <HelpCircle className="w-4 h-4 text-[#65B32E]" />
@@ -322,7 +322,7 @@ export const CustomerProfileScreen: React.FC<{
       {/* EDIT PROFILE MODAL */}
       {showEditProfile && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
+          <div className="w-full max-w-sm bg-[#FFFFFF] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
               <h3 className="font-bold text-sm text-[#111111]">{t('edit_profile')}</h3>
               <button
@@ -369,7 +369,7 @@ export const CustomerProfileScreen: React.FC<{
       {/* SAVED ADDRESSES MODAL */}
       {showAddresses && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
+          <div className="w-full max-w-sm bg-[#FFFFFF] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
               <h3 className="font-bold text-sm text-[#111111]">{t('saved_addresses')}</h3>
               <button
@@ -433,7 +433,7 @@ export const CustomerProfileScreen: React.FC<{
       {/* SETTINGS MODAL */}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
+          <div className="w-full max-w-sm bg-[#FFFFFF] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
               <h3 className="font-bold text-sm text-[#111111]">{t('notifications')}</h3>
               <button

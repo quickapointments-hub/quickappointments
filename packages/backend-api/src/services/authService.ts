@@ -12,6 +12,7 @@ import {
   mapProviderDto,
   mapDocumentDto,
 } from '../db/supabaseDb';
+import { LocationService } from './locationService';
 
 interface OtpEntry {
   otp: string;
@@ -254,10 +255,11 @@ export class AuthService {
     phone: string;
     email?: string;
     city?: string;
+    state?: string;
+    district?: string;
+    pincode?: string;
     address?: string;
     area?: string;
-    state?: string;
-    pincode?: string;
   }) {
     const clean = normalizePhone10(payload.phone);
     if (!clean || clean.length < 10) {
@@ -280,11 +282,36 @@ export class AuthService {
       }
     }
 
+    // Admin-controlled Location Master Validation
+    let resolvedCity = payload.city?.trim() || '';
+    let resolvedState = payload.state?.trim() || '';
+    let resolvedDistrict = '';
+    let resolvedCountry = 'India';
+    let locationId: string | null = null;
+
+    if (payload.pincode) {
+      const cleanPin = String(payload.pincode).replace(/\D/g, '').trim();
+      if (cleanPin.length === 6) {
+        const val = await LocationService.validatePincode(cleanPin);
+        if (!val.serviceable) {
+          const err: any = new Error(val.message || `PIN code ${cleanPin} is not a serviceable area.`);
+          err.status = 400;
+          throw err;
+        }
+        if (val.location) {
+          resolvedCity = val.location.city;
+          resolvedState = val.location.state;
+          resolvedDistrict = val.location.district;
+          resolvedCountry = val.location.country || 'India';
+          locationId = val.location.id || null;
+        }
+      }
+    }
+
     const fullAddress =
       payload.address?.trim() ||
-      [payload.area, payload.city, payload.state, payload.pincode].filter(Boolean).join(', ') ||
-      `${payload.city || 'Hyderabad'}, India`;
-    const resolvedCity = payload.city?.trim() || 'Hyderabad';
+      [payload.area, resolvedCity, resolvedState, payload.pincode].filter(Boolean).join(', ') ||
+      (resolvedCity ? `${resolvedCity}, India` : 'India');
 
     let userRow = await this.findUserByPhone(clean);
     if (!userRow) {
@@ -319,11 +346,21 @@ export class AuthService {
       customerRow = await SupabaseDb.insertOne<any>('customer_profiles', {
         user_id: userRow.id,
         city: resolvedCity,
+        state: resolvedState || null,
+        district: resolvedDistrict || null,
+        pincode: payload.pincode?.trim() || null,
+        country: resolvedCountry,
+        location_id: locationId,
         default_address: fullAddress,
       });
     } else {
       customerRow = await SupabaseDb.updateOne<any>('customer_profiles', existingCust.id, {
         city: resolvedCity,
+        state: resolvedState || existingCust.state || null,
+        district: resolvedDistrict || existingCust.district || null,
+        pincode: payload.pincode?.trim() || existingCust.pincode || null,
+        country: resolvedCountry,
+        location_id: locationId || existingCust.location_id || null,
         default_address: fullAddress,
         updated_at: new Date().toISOString(),
       });
@@ -379,6 +416,9 @@ export class AuthService {
     businessType?: string;
     category?: string;
     city?: string;
+    state?: string;
+    district?: string;
+    pincode?: string;
     address?: string;
     about?: string;
     bio?: string;
@@ -449,10 +489,35 @@ export class AuthService {
         ? 'BUSINESS'
         : 'INDIVIDUAL';
 
-    const resolvedCity = payload.city?.trim() || 'Bangalore';
+    // Location validation against Admin Location Master
+    let resolvedCity = payload.city?.trim() || '';
+    let resolvedState = (payload as any).state?.trim() || '';
+    let resolvedDistrict = (payload as any).district?.trim() || '';
+    let resolvedPincode = (payload as any).pincode?.trim() || '';
+    let locationId: string | null = null;
+
+    if (resolvedPincode) {
+      const cleanPin = resolvedPincode.replace(/\D/g, '').trim();
+      if (cleanPin.length === 6) {
+        const val = await LocationService.validatePincode(cleanPin);
+        if (!val.serviceable) {
+          const err: any = new Error(val.message || `PIN code ${cleanPin} is not a serviceable area.`);
+          err.status = 400;
+          throw err;
+        }
+        if (val.location) {
+          resolvedCity = val.location.city;
+          resolvedState = val.location.state;
+          resolvedDistrict = val.location.district;
+          resolvedPincode = val.location.pincode;
+          locationId = val.location.id || null;
+        }
+      }
+    }
+
     const resolvedBusinessName = payload.businessName?.trim() || `${payload.fullName.trim()}'s Services`;
     const resolvedBio = payload.bio || payload.about || (payload.category ? `${payload.category} specialist` : 'Verified specialist');
-    const resolvedAddress = payload.address?.trim() || `${resolvedCity}, India`;
+    const resolvedAddress = payload.address?.trim() || (resolvedCity ? `${resolvedCity}, India` : 'India');
 
     let resolvedLat = typeof (payload as any).latitude === 'number' ? (payload as any).latitude : null;
     let resolvedLng = typeof (payload as any).longitude === 'number' ? (payload as any).longitude : null;
@@ -483,6 +548,10 @@ export class AuthService {
       bio: resolvedBio,
       experience_years: Number(payload.experienceYears) || existingProv?.experience_years || 1,
       city: resolvedCity,
+      state: resolvedState || existingProv?.state || null,
+      district: resolvedDistrict || existingProv?.district || null,
+      pincode: resolvedPincode || existingProv?.pincode || null,
+      location_id: locationId || existingProv?.location_id || null,
       address: resolvedAddress,
       latitude: resolvedLat || existingProv?.latitude || null,
       longitude: resolvedLng || existingProv?.longitude || null,

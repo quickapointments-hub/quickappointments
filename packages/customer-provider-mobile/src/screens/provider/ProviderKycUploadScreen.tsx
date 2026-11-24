@@ -247,7 +247,7 @@ export const ProviderKycUploadScreen: React.FC<ProviderKycUploadScreenProps> = (
           <input
             ref={cameraPickerRef}
             type="file"
-            accept="image/png,image/jpeg"
+            accept="image/*"
             capture="environment"
             onChange={handleFileChange}
             className="hidden"
@@ -255,14 +255,14 @@ export const ProviderKycUploadScreen: React.FC<ProviderKycUploadScreenProps> = (
           <input
             ref={galleryPickerRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/jpeg,image/png,image/webp,image/jpg"
             onChange={handleFileChange}
             className="hidden"
           />
           <input
             ref={filePickerRef}
             type="file"
-            accept="application/pdf,image/png,image/jpeg"
+            accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/jpg"
             onChange={handleFileChange}
             className="hidden"
           />

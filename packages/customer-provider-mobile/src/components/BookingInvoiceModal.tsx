@@ -27,7 +27,7 @@ export const BookingInvoiceModal: React.FC<BookingInvoiceModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-xs animate-fadeIn">
       <div className="bg-white w-full max-w-lg rounded-t-[32px] sm:rounded-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9]">
         {/* Modal Top Bar */}
-        <div className="p-4 px-5 border-b border-[#E8E4D9] flex items-center justify-between bg-[#FDFCF4] print:hidden">
+        <div className="p-4 px-5 border-b border-[#E8E4D9] flex items-center justify-between bg-[#FFFFFF] print:hidden">
           <div className="flex items-center gap-2 text-xs font-bold text-[#111111]">
             <FaFileInvoice size={16} color="#65B32E" />
             <span>Official Booking Tax Invoice</span>
@@ -67,7 +67,7 @@ export const BookingInvoiceModal: React.FC<BookingInvoiceModalProps> = ({
           </div>
 
           {/* Details Row */}
-          <div className="grid grid-cols-2 gap-4 bg-[#FDFCF4] p-4 rounded-xl border border-[#E8E4D9]">
+          <div className="grid grid-cols-2 gap-4 bg-[#FFFFFF] p-4 rounded-xl border border-[#E8E4D9]">
             <div>
               <span className="text-[10px] uppercase font-bold text-[#6B7280]">Customer Details</span>
               <p className="font-bold text-sm text-[#111111] mt-0.5">{booking.customerName || 'Registered Customer'}</p>
@@ -85,7 +85,7 @@ export const BookingInvoiceModal: React.FC<BookingInvoiceModalProps> = ({
           {/* Items Table */}
           <div className="border border-[#E8E4D9] rounded-xl overflow-hidden">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#FAF8F0] border-b border-[#E8E4D9] text-[#4B5563]">
+              <thead className="bg-[#FFFFFF] border-b border-[#E8E4D9] text-[#4B5563]">
                 <tr>
                   <th className="p-3">Service Description</th>
                   <th className="p-3 text-center">Duration</th>

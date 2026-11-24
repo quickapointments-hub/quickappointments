@@ -636,7 +636,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#FAF8F0] border border-[#E8E4D9] text-xs text-left space-y-1.5">
+            <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E8E4D9] text-xs text-left space-y-1.5">
               <p className="text-[#4B5563]">
                 <span className="font-bold text-[#111111]">Service:</span> {service.name}
               </p>

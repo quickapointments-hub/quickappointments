@@ -109,12 +109,12 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-[#FDFCF4] w-full max-w-sm rounded-t-[32px] sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9] p-6 text-center space-y-4 max-h-[85vh] overflow-y-auto"
+        className="relative bg-[#FFFFFF] w-full max-w-sm rounded-t-[32px] sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-[#E8E4D9] p-6 text-center space-y-4 max-h-[85vh] overflow-y-auto"
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-7 h-7 rounded-full bg-[#FAF8F0] border border-[#E8E4D9] text-[#6B7280] hover:text-[#111111] flex items-center justify-center cursor-pointer transition-colors text-xs"
+          className="absolute top-4 right-4 w-7 h-7 rounded-full bg-[#FFFFFF] border border-[#E8E4D9] text-[#6B7280] hover:text-[#111111] flex items-center justify-center cursor-pointer transition-colors text-xs"
           aria-label="Close"
         >
           ✕

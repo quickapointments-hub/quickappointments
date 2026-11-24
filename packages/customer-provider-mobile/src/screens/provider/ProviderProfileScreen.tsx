@@ -40,7 +40,7 @@ export const ProviderProfileScreen: React.FC<{
     languages[0] || { code: 'en', name: 'English', nativeName: 'English' };
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FFFFFF] text-[#111111] min-h-full">
       {/* LANGUAGE SELECTION MODAL */}
       <LanguageModal isOpen={showLanguageModal} onClose={() => setShowLanguageModal(false)} />
       <div>
@@ -98,7 +98,7 @@ export const ProviderProfileScreen: React.FC<{
         <div className="bg-white rounded-3xl border border-[#E8E4D9] divide-y divide-[#F2EFE8] overflow-hidden shadow-sm">
           <div
             onClick={onOpenServices}
-            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+            className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
           >
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Layers className="w-4 h-4 text-[#65B32E]" />
@@ -112,7 +112,7 @@ export const ProviderProfileScreen: React.FC<{
 
           <div
             onClick={onOpenKyc}
-            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+            className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
           >
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Briefcase className="w-4 h-4 text-[#65B32E]" />
@@ -123,7 +123,7 @@ export const ProviderProfileScreen: React.FC<{
 
           <div
             onClick={onOpenReviews}
-            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+            className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
           >
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Star className="w-4 h-4 text-[#65B32E]" />
@@ -134,7 +134,7 @@ export const ProviderProfileScreen: React.FC<{
 
           <div
             onClick={onOpenBranches}
-            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+            className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
           >
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Building2 className="w-4 h-4 text-[#65B32E]" />
@@ -145,7 +145,7 @@ export const ProviderProfileScreen: React.FC<{
 
           <div
             onClick={onOpenStaff}
-            className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+            className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
           >
             <div className="flex items-center gap-3 text-[#111111] font-semibold">
               <Users className="w-4 h-4 text-[#65B32E]" />
@@ -156,7 +156,7 @@ export const ProviderProfileScreen: React.FC<{
 
         <div
           onClick={() => setShowLanguageModal(true)}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <Globe className="w-4 h-4 text-[#65B32E]" />
@@ -172,7 +172,7 @@ export const ProviderProfileScreen: React.FC<{
 
         <div
           onClick={onOpenSupport}
-          className="p-4 flex items-center justify-between hover:bg-[#FAF8F0] cursor-pointer transition-colors text-xs"
+          className="p-4 flex items-center justify-between hover:bg-[#FFFFFF] cursor-pointer transition-colors text-xs"
         >
           <div className="flex items-center gap-3 text-[#111111] font-semibold">
             <HelpCircle className="w-4 h-4 text-[#65B32E]" />

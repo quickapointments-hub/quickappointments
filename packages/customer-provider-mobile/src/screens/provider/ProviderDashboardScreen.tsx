@@ -14,9 +14,11 @@ import {
   ChevronRight,
   KeyRound,
   Layers,
+  MessageSquare,
 } from 'lucide-react';
 import { IncomingRequestModal } from '../../components/IncomingRequestModal';
 import { BookingOtpModal } from '../../components/BookingOtpModal';
+import { BookingChatDrawer } from '../../components/BookingChatDrawer';
 
 export const ProviderDashboardScreen: React.FC<{
   onNavigateToSchedule: () => void;
@@ -30,6 +32,7 @@ export const ProviderDashboardScreen: React.FC<{
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [activeRequest, setActiveRequest] = useState<any>(null);
   const [otpBooking, setOtpBooking] = useState<any>(null);
+  const [chatBooking, setChatBooking] = useState<any>(null);
 
   useEffect(() => {
     loadProviderData();
@@ -120,7 +123,7 @@ export const ProviderDashboardScreen: React.FC<{
   const isApproved = verificationStatus === 'APPROVED';
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-5 bg-[#FFFFFF] text-[#111111] min-h-full">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -252,7 +255,7 @@ export const ProviderDashboardScreen: React.FC<{
                 </span>
               </div>
 
-              <div className="p-2 rounded-xl bg-[#FAF8F0] border border-[#E8E4D9] flex items-center justify-between text-xs font-semibold text-[#111111]">
+              <div className="p-2 rounded-xl bg-[#FFFFFF] border border-[#E8E4D9] flex items-center justify-between text-xs font-semibold text-[#111111]">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-[#65B32E]" />
                   <span>{b.date}</span>
@@ -263,7 +266,7 @@ export const ProviderDashboardScreen: React.FC<{
               </div>
 
               {b.notes && (
-                <p className="text-[11px] text-[#4B5563] bg-[#FAF8F0] p-2 rounded-xl italic border border-[#E8E4D9]">
+                <p className="text-[11px] text-[#4B5563] bg-[#FFFFFF] p-2 rounded-xl italic border border-[#E8E4D9]">
                   Note: "{b.notes}"
                 </p>
               )}
@@ -281,7 +284,7 @@ export const ProviderDashboardScreen: React.FC<{
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(b.id, 'DECLINED')}
-                      className="px-3 py-2 rounded-xl bg-[#FAF8F0] hover:bg-white text-[#4B5563] border border-[#E8E4D9] text-xs font-semibold cursor-pointer"
+                      className="px-3 py-2 rounded-xl bg-[#FFFFFF] hover:bg-white text-[#4B5563] border border-[#E8E4D9] text-xs font-semibold cursor-pointer"
                     >
                       Decline
                     </button>
@@ -293,7 +296,14 @@ export const ProviderDashboardScreen: React.FC<{
                       className="flex-1 py-2 rounded-xl bg-[#65B32E] hover:bg-[#529624] text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5 text-white" />
-                      <span>Check-In Arriving Customer</span>
+                      <span>Check-In</span>
+                    </button>
+                    <button
+                      onClick={() => setChatBooking(b)}
+                      className="px-3 py-2 rounded-xl bg-[#EFF8E7] hover:bg-[#E2F4D5] text-[#16A34A] border border-[#16A34A]/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-[#16A34A]" />
+                      <span>Chat</span>
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(b.id, 'CANCELLED')}
@@ -336,6 +346,13 @@ export const ProviderDashboardScreen: React.FC<{
           onClose={() => setOtpBooking(null)}
         />
       )}
+
+      {/* In-Booking Live Chat Drawer */}
+      <BookingChatDrawer
+        isOpen={!!chatBooking}
+        onClose={() => setChatBooking(null)}
+        booking={chatBooking}
+      />
     </div>
   );
 };

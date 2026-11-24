@@ -201,7 +201,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   }, [query, city]);
 
   return (
-    <div className="pb-24 min-h-full bg-[#FDFCF4] text-[#111111] flex flex-col">
+    <div className="pb-24 min-h-full bg-[#FFFFFF] text-[#111111] flex flex-col">
       {/* 1. Top Bar with Logo & Location Pill (Matching Reference Image 3) */}
       <div className="px-5 pt-4 pb-2 flex items-center justify-between">
         <QuickAppointmentsLogo />

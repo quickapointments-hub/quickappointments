@@ -95,13 +95,13 @@ export const ProviderAvailabilityScreen: React.FC<{ onBack?: () => void }> = ({ 
   };
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FFFFFF] text-[#111111] min-h-full">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-1.5 rounded-full bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FAF8F0] cursor-pointer"
+              className="p-1.5 rounded-full bg-white border border-[#E8E4D9] text-[#111111] hover:bg-[#FFFFFF] cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -155,7 +155,7 @@ export const ProviderAvailabilityScreen: React.FC<{ onBack?: () => void }> = ({ 
                 key={item.day}
                 className={`p-3 rounded-2xl border transition-all space-y-2 text-xs ${
                   item.isClosed
-                    ? 'bg-[#FAF8F0] border-[#E8E4D9] opacity-70'
+                    ? 'bg-[#FFFFFF] border-[#E8E4D9] opacity-70'
                     : 'bg-white border-[#E8E4D9]'
                 }`}
               >
@@ -187,7 +187,7 @@ export const ProviderAvailabilityScreen: React.FC<{ onBack?: () => void }> = ({ 
                         type="time"
                         value={item.open}
                         onChange={(e) => updateTime(idx, 'open', e.target.value)}
-                        className="w-full px-2 py-1 rounded-lg border border-[#DCD8C8] bg-[#FDFCF4] font-mono text-[11px]"
+                        className="w-full px-2 py-1 rounded-lg border border-[#DCD8C8] bg-[#FFFFFF] font-mono text-[11px]"
                       />
                     </div>
                     <div>
@@ -196,7 +196,7 @@ export const ProviderAvailabilityScreen: React.FC<{ onBack?: () => void }> = ({ 
                         type="time"
                         value={item.close}
                         onChange={(e) => updateTime(idx, 'close', e.target.value)}
-                        className="w-full px-2 py-1 rounded-lg border border-[#DCD8C8] bg-[#FDFCF4] font-mono text-[11px]"
+                        className="w-full px-2 py-1 rounded-lg border border-[#DCD8C8] bg-[#FFFFFF] font-mono text-[11px]"
                       />
                     </div>
                   </div>

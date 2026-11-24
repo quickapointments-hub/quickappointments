@@ -12,7 +12,7 @@
 @layer base {
   html, body {
     @apply font-sans select-none antialiased;
-    background-color: #FDFCF4;
+    background-color: #FFFFFF;
     color: #111111;
     -webkit-tap-highlight-color: transparent;
     padding-top: env(safe-area-inset-top, 0px);

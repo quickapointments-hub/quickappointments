@@ -81,14 +81,14 @@ export const ProviderServicesScreen: React.FC<ProviderServicesScreenProps> = ({ 
   }, [services, activeTab]);
 
   return (
-    <div className="relative min-h-full h-full flex flex-col bg-[#FDFCF4] text-[#111111]">
+    <div className="relative min-h-full h-full flex flex-col bg-[#FFFFFF] text-[#111111]">
       {/* Top Header */}
       <div className="p-4 px-5 border-b border-[#E8E4D9] bg-white flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-3">
           {onBack && (
             <button
               onClick={onBack}
-              className="w-8 h-8 rounded-full bg-[#FAF8F0] border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#F5F2E6] cursor-pointer"
+              className="w-8 h-8 rounded-full bg-[#FFFFFF] border border-[#E8E4D9] flex items-center justify-center text-[#111111] hover:bg-[#FFFFFF] cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
             </button>
@@ -140,7 +140,7 @@ export const ProviderServicesScreen: React.FC<ProviderServicesScreenProps> = ({ 
 
       {/* Filter Tabs */}
       <div className="px-4 pb-2">
-        <div className="flex items-center gap-1 bg-[#F5F2E6] p-1 rounded-2xl text-[11px] font-bold">
+        <div className="flex items-center gap-1 bg-[#FFFFFF] p-1 rounded-2xl text-[11px] font-bold">
           {(['ALL', 'APPROVED', 'PENDING', 'REJECTED'] as const).map((tab) => (
             <button
               key={tab}
@@ -208,7 +208,7 @@ export const ProviderServicesScreen: React.FC<ProviderServicesScreenProps> = ({ 
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-full bg-[#FAF8F0] border border-[#E8E4D9] text-[10px] font-bold text-[#4B5563]">
+                        <span className="px-2 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E8E4D9] text-[10px] font-bold text-[#4B5563]">
                           {s.categoryName || 'General'}
                         </span>
                         {isApproved && (
@@ -250,7 +250,7 @@ export const ProviderServicesScreen: React.FC<ProviderServicesScreenProps> = ({ 
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-[#F5F2E6] text-xs">
+                <div className="flex items-center justify-between pt-2 border-t border-[#FFFFFF] text-xs">
                   <div className="flex items-center gap-3">
                     <div className="font-mono">
                       <span className="text-[10px] text-[#6B7280] block">Your Rate</span>

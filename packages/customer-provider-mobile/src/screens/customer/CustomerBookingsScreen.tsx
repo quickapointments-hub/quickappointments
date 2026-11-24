@@ -16,9 +16,11 @@ import {
   X,
   FileText,
   BadgeAlert,
+  MessageSquare,
 } from 'lucide-react';
 import { ReviewModal } from '../../components/ReviewModal';
 import { AppointmentTrackerModal } from '../../components/AppointmentTrackerModal';
+import { BookingChatDrawer } from '../../components/BookingChatDrawer';
 
 const TIME_SLOTS = [
   '10:00 AM', '11:30 AM', '01:00 PM', '02:30 PM', '04:00 PM', '05:30 PM', '07:00 PM'
@@ -42,6 +44,7 @@ export const CustomerBookingsScreen: React.FC<{
 
   // Appointment Details State
   const [detailsBooking, setDetailsBooking] = useState<any>(null);
+  const [chatBooking, setChatBooking] = useState<any>(null);
 
   useEffect(() => {
     loadBookings();
@@ -113,7 +116,7 @@ export const CustomerBookingsScreen: React.FC<{
   });
 
   return (
-    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FDFCF4] text-[#111111] min-h-full">
+    <div className="pb-24 px-5 pt-4 space-y-4 bg-[#FFFFFF] text-[#111111] min-h-full">
       <div>
         <h2 className="text-lg font-black font-display text-[#111111] tracking-tight">
           My Appointments
@@ -185,7 +188,7 @@ export const CustomerBookingsScreen: React.FC<{
               </div>
 
               {/* Schedule time chip */}
-              <div className="p-2.5 rounded-xl bg-[#FAF8F0] border border-[#E8E4D9] flex items-center justify-between text-xs font-medium text-[#111111]">
+              <div className="p-2.5 rounded-xl bg-[#FFFFFF] border border-[#E8E4D9] flex items-center justify-between text-xs font-medium text-[#111111]">
                 <span className="flex items-center gap-1.5 font-bold">
                   <Calendar className="w-3.5 h-3.5 text-[#65B32E]" />
                   <span>{b.date}</span>
@@ -243,8 +246,16 @@ export const CustomerBookingsScreen: React.FC<{
                   </button>
 
                   <button
+                    onClick={() => setChatBooking(b)}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#16A34A] bg-[#EFF8E7] hover:bg-[#E2F4D5] border border-[#65B32E] transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-[#16A34A]" />
+                    <span>Chat</span>
+                  </button>
+
+                  <button
                     onClick={() => setDetailsBooking(b)}
-                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#4B5563] bg-[#FAF8F0] hover:bg-white border border-[#E8E4D9] transition-all cursor-pointer"
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#4B5563] bg-[#FFFFFF] hover:bg-white border border-[#E8E4D9] transition-all cursor-pointer"
                   >
                     Details
                   </button>
@@ -271,8 +282,16 @@ export const CustomerBookingsScreen: React.FC<{
                     <span>Rate & Review Specialist</span>
                   </button>
                   <button
+                    onClick={() => setChatBooking(b)}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#16A34A] bg-[#EFF8E7] hover:bg-[#E2F4D5] border border-[#65B32E] transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-[#16A34A]" />
+                    <span>Chat</span>
+                  </button>
+
+                  <button
                     onClick={() => setDetailsBooking(b)}
-                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#4B5563] bg-[#FAF8F0] hover:bg-white border border-[#E8E4D9] transition-all cursor-pointer"
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-[#4B5563] bg-[#FFFFFF] hover:bg-white border border-[#E8E4D9] transition-all cursor-pointer"
                   >
                     Details
                   </button>
@@ -307,7 +326,7 @@ export const CustomerBookingsScreen: React.FC<{
       {/* RESCHEDULING MODAL */}
       {reschedulingBooking && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
+          <div className="w-full max-w-sm bg-[#FFFFFF] rounded-t-3xl sm:rounded-3xl p-5 border border-[#E8E4D9] shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#E8E4D9] pb-3">
               <h3 className="font-bold text-sm text-[#111111]">Reschedule Appointment</h3>
               <button
@@ -341,7 +360,7 @@ export const CustomerBookingsScreen: React.FC<{
                       className={`p-2.5 rounded-xl text-xs font-bold transition-all border text-center ${
                         isSelected
                           ? 'bg-[#EFF8E7] text-[#111111] border-[#65B32E]'
-                          : 'bg-white text-[#4B5563] border-[#E8E4D9] hover:bg-[#FAF8F0]'
+                          : 'bg-white text-[#4B5563] border-[#E8E4D9] hover:bg-[#FFFFFF]'
                       }`}
                     >
                       {slot}
@@ -395,6 +414,13 @@ export const CustomerBookingsScreen: React.FC<{
           onClose={() => setReviewBooking(null)}
         />
       )}
+
+      {/* In-Booking Live Chat Drawer */}
+      <BookingChatDrawer
+        isOpen={!!chatBooking}
+        onClose={() => setChatBooking(null)}
+        booking={chatBooking}
+      />
     </div>
   );
 };

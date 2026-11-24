@@ -73,8 +73,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#FDFCF4] sm:bg-black/60 flex items-center justify-center p-0 sm:p-4 overflow-y-auto backdrop-blur-xs animate-fadeIn font-sans">
-      <div className="bg-[#FDFCF4] w-full max-w-md min-h-screen sm:min-h-0 sm:max-h-[92vh] sm:rounded-[36px] overflow-hidden flex flex-col shadow-2xl border-0 sm:border sm:border-[#E8E4D9]">
+    <div className="fixed inset-0 z-50 bg-[#FFFFFF] sm:bg-black/60 flex items-center justify-center p-0 sm:p-4 overflow-y-auto backdrop-blur-xs animate-fadeIn font-sans">
+      <div className="bg-[#FFFFFF] w-full max-w-md min-h-screen sm:min-h-0 sm:max-h-[92vh] sm:rounded-[36px] overflow-hidden flex flex-col shadow-2xl border-0 sm:border sm:border-[#E8E4D9]">
         {/* Header matching Screenshot 3 */}
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-4 py-3.5 border-b border-[#E8E4D9] flex items-center justify-between">
           <div className="flex items-center gap-2">

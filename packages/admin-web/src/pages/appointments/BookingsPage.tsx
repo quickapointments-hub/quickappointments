@@ -39,6 +39,8 @@ export const BookingsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedApt, setSelectedApt] = useState<AppointmentItem | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     loadBookings();
@@ -67,6 +69,10 @@ export const BookingsPage: React.FC = () => {
             b.customer?.fullName ||
             b.customerName ||
             'Customer';
+          const reasonStr = String(b.cancellationReason || b.cancellation_reason || '').toLowerCase();
+          const rawStatus = String(b.status || 'CONFIRMED').toUpperCase();
+          const isNoShow = rawStatus === 'NO_SHOW' || (rawStatus === 'CANCELLED' && reasonStr.includes('no show'));
+          const isCheckedIn = rawStatus === 'CHECKED_IN' || (rawStatus === 'IN_PROGRESS' && reasonStr.includes('checked in'));
           return {
             id: b.id,
             bookingRef: b.bookingRef || b.booking_ref || `QA-${b.id.slice(0, 6)}`,
@@ -81,39 +87,52 @@ export const BookingsPage: React.FC = () => {
               'Service Provider',
             dateTime: `${b.date || 'Today'}, ${b.startTime || b.start_time || '10:00 AM'}`,
             amount: b.totalAmount ?? b.total_amount ?? 0,
-            status: (b.status || 'CONFIRMED').toUpperCase(),
+            status: isNoShow ? 'NO_SHOW' : isCheckedIn ? 'CHECKED_IN' : rawStatus,
           };
         });
-        setAppointments(mapped);
+          setAppointments(mapped);
+        }
+      } catch (e) {
+        console.warn('Error loading bookings from database:', e);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.warn('Error loading bookings from database:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  // Dynamic KPI Stats calculated from real database rows
-  const totalAppointments = appointments.length;
-  const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
-  const confirmedCount = appointments.filter((a) => a.status === 'CONFIRMED').length;
-  const checkedInCount = appointments.filter((a) => a.status === 'CHECKED_IN').length;
-  const ongoingCount = appointments.filter((a) => a.status === 'IN_PROGRESS' || a.status === 'ONGOING').length;
-  const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
-  const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
-  const noShowCount = appointments.filter((a) => a.status === 'NO_SHOW').length;
+    // Dynamic KPI Stats calculated from real database rows
+    const totalAppointments = appointments.length;
+    const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
+    const confirmedCount = appointments.filter((a) => a.status === 'CONFIRMED').length;
+    const checkedInCount = appointments.filter((a) => a.status === 'CHECKED_IN').length;
+    const ongoingCount = appointments.filter((a) => a.status === 'IN_PROGRESS' || a.status === 'ONGOING').length;
+    const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
+    const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
+    const noShowCount = appointments.filter((a) => a.status === 'NO_SHOW').length;
 
-  const handleUpdateStatus = async (id: string, newStatus: string) => {
-    try {
-      await api.updateBookingStatus(id, newStatus);
-      setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: newStatus.toUpperCase() } : a))
-      );
+    const handleUpdateStatus = async (id: string, newStatus: string) => {
+      setActionLoadingId(id);
       setOpenActionId(null);
-    } catch (err: any) {
-      alert(`Failed to update booking status: ${err.message}`);
-    }
-  };
+      setFeedback(null);
+      try {
+        await api.updateBookingStatus(id, newStatus);
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: newStatus.toUpperCase() } : a))
+        );
+        setFeedback({
+          type: 'success',
+          message: `Appointment status updated to ${newStatus.replace('_', ' ')}.`,
+        });
+        setTimeout(() => setFeedback(null), 4000);
+        loadBookings();
+      } catch (err: any) {
+        setFeedback({
+          type: 'error',
+          message: `Failed to update status: ${err.message || 'Server error'}`,
+        });
+      } finally {
+        setActionLoadingId(null);
+      }
+    };
 
   const filtered = appointments.filter((apt) => {
     if (activeTab === 'Checked_In') {
@@ -169,6 +188,28 @@ export const BookingsPage: React.FC = () => {
           <span>Export Ledger</span>
         </button>
       </div>
+
+      {/* Inline Feedback Banner */}
+      {feedback && (
+        <div
+          className={`p-3.5 rounded-2xl flex items-center justify-between text-xs font-bold transition-all ${
+            feedback.type === 'success'
+              ? 'bg-[#EFF8E7] text-[#16A34A] border border-[#16A34A]/30'
+              : 'bg-rose-50 text-rose-700 border border-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span>{feedback.type === 'success' ? '✓' : '⚠️'}</span>
+            <span>{feedback.message}</span>
+          </div>
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-slate-400 hover:text-slate-700 font-bold px-2 py-0.5 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 5 KPI Stat Cards (Matching Reference Screenshot - Dynamic from DB) */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -395,9 +436,14 @@ export const BookingsPage: React.FC = () => {
                       <div className="relative inline-block text-left">
                         <button
                           onClick={() => setOpenActionId(openActionId === apt.id ? null : apt.id)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+                          disabled={actionLoadingId === apt.id}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer disabled:opacity-50"
                         >
-                          <MoreVertical className="w-4 h-4" />
+                          {actionLoadingId === apt.id ? (
+                            <RotateCw className="w-4 h-4 animate-spin text-[#16A34A]" />
+                          ) : (
+                            <MoreVertical className="w-4 h-4" />
+                          )}
                         </button>
 
                         {openActionId === apt.id && (

@@ -17,6 +17,7 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-react';
+import { BookingChatDrawer } from './BookingChatDrawer';
 
 export interface AppointmentTrackerModalProps {
   isOpen: boolean;
@@ -62,8 +63,8 @@ export const AppointmentTrackerModal: React.FC<AppointmentTrackerModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#FDFCF4] sm:bg-black/60 flex items-center justify-center p-0 sm:p-4 overflow-y-auto backdrop-blur-xs animate-fadeIn font-sans">
-      <div className="bg-[#FDFCF4] w-full max-w-md min-h-screen sm:min-h-0 sm:max-h-[92vh] sm:rounded-[36px] overflow-hidden flex flex-col shadow-2xl border-0 sm:border sm:border-[#E8E4D9]">
+    <div className="fixed inset-0 z-50 bg-[#FFFFFF] sm:bg-black/60 flex items-center justify-center p-0 sm:p-4 overflow-y-auto backdrop-blur-xs animate-fadeIn font-sans">
+      <div className="bg-[#FFFFFF] w-full max-w-md min-h-screen sm:min-h-0 sm:max-h-[92vh] sm:rounded-[36px] overflow-hidden flex flex-col shadow-2xl border-0 sm:border sm:border-[#E8E4D9]">
         {/* Top Header matching Screenshot 4 */}
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-4 py-3.5 border-b border-[#E8E4D9] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -263,15 +264,24 @@ export const AppointmentTrackerModal: React.FC<AppointmentTrackerModalProps> = (
               </div>
             </div>
 
-            {/* Action Buttons: Call & Directions */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
+            {/* Action Buttons: Call, Live Chat & Directions */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <a
                 href="tel:+919876543210"
                 className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200/80 cursor-pointer"
               >
                 <Phone className="w-3.5 h-3.5 text-[#16A34A]" />
-                <span>Call Center</span>
+                <span>Call</span>
               </a>
+
+              <button
+                type="button"
+                onClick={() => setChattingPro(true)}
+                className="py-2.5 rounded-xl bg-[#EFF8E7] hover:bg-[#E2F2D5] text-[#16A34A] font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-[#16A34A]/30 cursor-pointer shadow-xs active:scale-95"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-[#16A34A]" />
+                <span>Chat</span>
+              </button>
 
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -346,6 +356,13 @@ export const AppointmentTrackerModal: React.FC<AppointmentTrackerModalProps> = (
           </div>
         </div>
       </div>
+
+      {/* In-Booking Live Chat Drawer */}
+      <BookingChatDrawer
+        isOpen={chattingPro}
+        onClose={() => setChattingPro(false)}
+        booking={b}
+      />
     </div>
   );
 };

@@ -15,7 +15,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-t-3xl sm:rounded-3xl border border-[#E8E4D9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+      <div className="w-full max-w-sm bg-[#FFFFFF] rounded-t-3xl sm:rounded-3xl border border-[#E8E4D9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-[#E8E4D9] flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
@@ -29,7 +29,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-[#FAF8F0] text-[#6B7280] transition-colors"
+            className="p-1.5 rounded-full hover:bg-[#FFFFFF] text-[#6B7280] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -49,7 +49,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
                 className={`w-full p-3 rounded-2xl flex items-center justify-between border transition-all text-left ${
                   isSelected
                     ? 'border-[#65B32E] bg-[#EFF8E7] text-[#111111] shadow-xs'
-                    : 'border-[#E8E4D9] bg-white hover:bg-[#FAF8F0] text-[#111111]'
+                    : 'border-[#E8E4D9] bg-white hover:bg-[#FFFFFF] text-[#111111]'
                 }`}
               >
                 <div>
@@ -77,7 +77,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-[#E8E4D9] bg-[#FAF8F0] text-center">
+        <div className="p-3 border-t border-[#E8E4D9] bg-[#FFFFFF] text-center">
           <p className="text-[10px] text-[#6B7280] font-medium">
             Language selection persists across visits and native device sessions.
           </p>

@@ -83,7 +83,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
+      <div className="w-full max-w-sm bg-[#FFFFFF] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
         {/* Urgent Header with 300s Countdown */}
         <div className="text-center space-y-2">
           <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
@@ -200,7 +200,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
 
             <button
               onClick={() => setRejecting(true)}
-              className="w-full py-2.5 rounded-xl border border-[#E8E4D9] text-[#4B5563] hover:text-[#111111] text-xs font-semibold bg-white hover:bg-[#FAF8F0] transition-all cursor-pointer"
+              className="w-full py-2.5 rounded-xl border border-[#E8E4D9] text-[#4B5563] hover:text-[#111111] text-xs font-semibold bg-white hover:bg-[#FFFFFF] transition-all cursor-pointer"
             >
               Decline Request
             </button>

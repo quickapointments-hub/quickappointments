@@ -9,8 +9,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#FDFCF4] text-[#111111] antialiased selection:bg-[#2E9E1E] selection:text-white">
+  <body class="bg-[#FFFFFF] text-[#111111] antialiased selection:bg-[#2E9E1E] selection:text-white">
     <div id="root"></div>
+    <script>
+      window.addEventListener('error', function(e) {
+        console.error('Global window error:', e);
+        var root = document.getElementById('root');
+        if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
+          root.innerHTML = '<div style="padding:28px;font-family:system-ui,-apple-system,sans-serif;background:#FFFFFF;color:#111;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">' +
+            '<div style="width:56px;height:56px;border-radius:28px;background:#EFF8E7;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px;">⚡</div>' +
+            '<h2 style="font-size:18px;font-weight:bold;color:#111;margin-bottom:8px;">Quick Appointments</h2>' +
+            '<p style="font-size:13px;color:#DC2626;background:#FEF2F2;border:1px solid #FCA5A5;padding:10px 14px;border-radius:12px;max-width:360px;word-break:break-word;margin-bottom:16px;">' +
+              (e.message || 'Script initialization error') +
+            '</p>' +
+            '<button onclick="try{localStorage.clear();sessionStorage.clear();}catch(x){}location.reload();" style="padding:10px 22px;background:#65B32E;color:#FFFFFF;border:none;border-radius:20px;font-weight:bold;font-size:13px;cursor:pointer;">' +
+              'Reset & Reload' +
+            '</button>' +
+          '</div>';
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

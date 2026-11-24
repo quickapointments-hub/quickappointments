@@ -34,7 +34,7 @@ export const AlternativeProvidersModal: React.FC<AlternativeProvidersModalProps>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-sm bg-[#FFFFFF] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-4 max-h-[90vh] overflow-y-auto">
         {/* Header Banner */}
         <div className="flex items-start justify-between pb-3 border-b border-[#E8E4D9]">
           <div className="space-y-1">

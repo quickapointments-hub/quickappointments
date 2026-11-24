@@ -67,7 +67,7 @@ export const AwaitingProviderModal: React.FC<AwaitingProviderModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] text-center space-y-5">
+      <div className="w-full max-w-sm bg-[#FFFFFF] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] text-center space-y-5">
         <div className="w-16 h-16 rounded-3xl bg-[#EFF8E7] border border-[#65B32E] text-[#65B32E] flex items-center justify-center mx-auto shadow-inner">
           <Clock className="w-8 h-8 animate-pulse text-[#65B32E]" />
         </div>

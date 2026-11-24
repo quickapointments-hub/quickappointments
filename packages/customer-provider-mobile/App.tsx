@@ -14,8 +14,16 @@ import {
   Platform,
   Dimensions,
   NativeModules,
+  PermissionsAndroid,
 } from 'react-native';
 import { registerRootComponent } from 'expo';
+
+let ImagePicker: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch (e) {
+  console.warn('expo-image-picker not available in current binary:', e);
+}
 import { RN_COLORS as COLORS, THEME_COLORS } from './src/theme';
 import { supabase } from './src/supabase';
 
@@ -24,17 +32,18 @@ const RNStatusBar = StatusBar as unknown as React.ComponentType<any>;
 
 // Global Safe Area Insets for Android and iOS
 const ANDROID_STATUS_BAR = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0;
-const TOP_SAFE_PADDING = Platform.OS === 'android' ? ANDROID_STATUS_BAR + 8 : 12;
+const TOP_SAFE_PADDING = Platform.OS === 'android' ? ANDROID_STATUS_BAR + 6 : 12;
 const BOTTOM_SAFE_PADDING = Platform.OS === 'android' ? 24 : 16;
 
-// Safe Screen Wrapper to avoid deprecated React Native SafeAreaView warnings
+// Safe Screen Wrapper to avoid deprecated React Native SafeAreaView warnings and ensure proper upper & bottom insets
 const SafeAreaView: React.FC<any> = ({ style, children, ...rest }) => (
   <View
     style={[
       {
         flex: 1,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0,
-        backgroundColor: COLORS.bg,
+        paddingTop: Platform.OS === 'android' ? ANDROID_STATUS_BAR : 0,
+        paddingBottom: Platform.OS === 'android' ? 8 : 4,
+        backgroundColor: '#FFFFFF',
       },
       style,
     ]}
@@ -614,6 +623,143 @@ const getCandidateApiUrls = (): string[] => {
 };
 
 // ----------------------------------------------------
+// ADMIN-CONTROLLED PIN CODE & LOCATION VALIDATION API
+// ----------------------------------------------------
+export interface AdminPincodeCheckResult {
+  success: boolean;
+  serviceable: boolean;
+  message: string;
+  data?: {
+    pincode: string;
+    city: string;
+    district: string;
+    state: string;
+    country: string;
+  };
+}
+
+export const verifyPincodeWithAdmin = async (
+  pincode: string
+): Promise<AdminPincodeCheckResult> => {
+  const cleanPin = (pincode || '').replace(/\D/g, '').trim();
+  if (cleanPin.length !== 6) {
+    return {
+      success: false,
+      serviceable: false,
+      message: 'Please enter a valid 6-digit Indian PIN code.',
+    };
+  }
+
+  const urls = getCandidateApiUrls();
+  for (const base of urls) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${base}/locations/validate-pincode?pincode=${cleanPin}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.serviceable && json.location) {
+          return {
+            success: true,
+            serviceable: true,
+            message: json.message || 'Serviceable location verified',
+            data: {
+              pincode: json.location.pincode || cleanPin,
+              city: json.location.city,
+              district: json.location.district || json.location.city,
+              state: json.location.state,
+              country: json.location.country || 'India',
+            },
+          };
+        } else {
+          return {
+            success: true,
+            serviceable: false,
+            message:
+              json.message ||
+              `Registration unavailable in PIN code ${cleanPin}. This area is not currently serviceable by Quick Appointments.`,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  // Direct Supabase fallback: query location_master
+  try {
+    const { data: locData, error: locErr } = await supabase
+      .from('location_master')
+      .select('*')
+      .eq('pincode', cleanPin)
+      .maybeSingle();
+
+    if (!locErr && locData) {
+      const isActive = locData.is_active !== false;
+      return {
+        success: true,
+        serviceable: isActive,
+        message: isActive
+          ? `Location verified: ${locData.city}, ${locData.state}`
+          : `Registration unavailable. Service in ${locData.city}, ${locData.state} (${cleanPin}) is currently inactive.`,
+        data: isActive
+          ? {
+              pincode: cleanPin,
+              city: locData.city,
+              district: locData.district || locData.city,
+              state: locData.state,
+              country: locData.country || 'India',
+            }
+          : undefined,
+      };
+    }
+  } catch {}
+
+  // Direct Supabase fallback: query cities table with pincodes
+  try {
+    const { data: citiesData, error: cityErr } = await supabase
+      .from('cities')
+      .select('*');
+
+    if (!cityErr && Array.isArray(citiesData)) {
+      for (const city of citiesData) {
+        const rawPins = String(city.pincodes || '');
+        const pinList = rawPins.split(',').map((p) => p.trim().replace(/\D/g, '')).filter(Boolean);
+        if (pinList.includes(cleanPin) || cleanPin === rawPins.trim()) {
+          const isActive = city.is_active !== false;
+          return {
+            success: true,
+            serviceable: isActive,
+            message: isActive
+              ? `Location verified: ${city.name}, ${city.state}`
+              : `Registration unavailable. Service in ${city.name}, ${city.state} (${cleanPin}) is currently inactive.`,
+            data: isActive
+              ? {
+                  pincode: cleanPin,
+                  city: city.name,
+                  district: city.district || city.name,
+                  state: city.state || 'Telangana',
+                  country: 'India',
+                }
+              : undefined,
+          };
+        }
+      }
+    }
+  } catch {}
+
+  return {
+    success: true,
+    serviceable: false,
+    message: `Registration unavailable in PIN code ${cleanPin}. This area is not currently configured as a serviceable area by Admin.`,
+  };
+};
+
+// ----------------------------------------------------
 // AUTO-ADVANCING 6-DIGIT OTP INPUT COMPONENT
 // ----------------------------------------------------
 interface OtpInputBoxesProps {
@@ -877,101 +1023,74 @@ const clipIllusStyles = StyleSheet.create({
 // ----------------------------------------------------
 // 4-STEP HORIZONTAL STEPPER COMPONENT
 // ----------------------------------------------------
-const ProviderStepper = ({ currentStep }: { currentStep: number }) => (
-  <View style={stepStyles.stepperWrapper}>
-    <View style={stepStyles.stepsRow}>
-      {/* Step 1 */}
-      <View style={stepStyles.stepCol}>
-        <View style={[
-          stepStyles.stepCircle,
-          currentStep > 1 && stepStyles.stepCircleCompleted,
-          currentStep === 1 && stepStyles.stepCircleActive,
-        ]}>
-          <Text style={[
-            stepStyles.stepNumber,
-            currentStep >= 1 && stepStyles.stepNumberActive,
-          ]}>
-            {currentStep > 1 ? '✓' : '1'}
-          </Text>
-        </View>
-        <Text style={[
-          stepStyles.stepLabel,
-          currentStep >= 1 && stepStyles.stepLabelActive,
-        ]}>
-          Basic Details
-        </Text>
-      </View>
-      <View style={[stepStyles.stepLine, currentStep > 1 && stepStyles.stepLineActive]} />
+const ProviderStepper = ({ currentStep }: { currentStep: number }) => {
+  const steps = [
+    { num: 1, label: 'Basic' },
+    { num: 2, label: 'Location' },
+    { num: 3, label: 'Services' },
+    { num: 4, label: 'Review' },
+  ];
 
-      {/* Step 2 */}
-      <View style={stepStyles.stepCol}>
-        <View style={[
-          stepStyles.stepCircle,
-          currentStep > 2 && stepStyles.stepCircleCompleted,
-          currentStep === 2 && stepStyles.stepCircleActive,
-        ]}>
-          <Text style={[
-            stepStyles.stepNumber,
-            currentStep >= 2 && stepStyles.stepNumberActive,
-          ]}>
-            {currentStep > 2 ? '✓' : '2'}
-          </Text>
-        </View>
-        <Text style={[
-          stepStyles.stepLabel,
-          currentStep >= 2 && stepStyles.stepLabelActive,
-        ]}>
-          Profile & Documents
-        </Text>
-      </View>
-      <View style={[stepStyles.stepLine, currentStep > 2 && stepStyles.stepLineActive]} />
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {/* 4-Step Horizontal Stepper with Connected Lines */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+        {steps.map((s, idx) => {
+          const isCompleted = currentStep > s.num;
+          const isActive = currentStep === s.num;
 
-      {/* Step 3 */}
-      <View style={stepStyles.stepCol}>
-        <View style={[
-          stepStyles.stepCircle,
-          currentStep > 3 && stepStyles.stepCircleCompleted,
-          currentStep === 3 && stepStyles.stepCircleActive,
-        ]}>
-          <Text style={[
-            stepStyles.stepNumber,
-            currentStep >= 3 && stepStyles.stepNumberActive,
-          ]}>
-            {currentStep > 3 ? '✓' : '3'}
-          </Text>
-        </View>
-        <Text style={[
-          stepStyles.stepLabel,
-          currentStep >= 3 && stepStyles.stepLabelActive,
-        ]}>
-          Service Details
-        </Text>
-      </View>
-      <View style={[stepStyles.stepLine, currentStep > 3 && stepStyles.stepLineActive]} />
+          return (
+            <React.Fragment key={s.num}>
+              <View style={{ alignItems: 'center', flex: 1, minWidth: 55 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: isActive || isCompleted ? '#15803D' : '#FFFFFF',
+                    borderWidth: isActive || isCompleted ? 0 : 2,
+                    borderColor: '#D1D5DB',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: isActive || isCompleted ? '#FFFFFF' : '#6B7280', fontSize: 13, fontWeight: 'bold' }}>
+                    {isCompleted ? '✓' : s.num}
+                  </Text>
+                </View>
+                <View style={{ marginTop: 6, alignItems: 'center', minHeight: 20, justifyContent: 'center' }}>
+                  {isActive ? (
+                    <View style={{ backgroundColor: '#E8F7E4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803D', textAlign: 'center' }} numberOfLines={1}>
+                        {s.label}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#6B7280', textAlign: 'center' }} numberOfLines={1}>
+                      {s.label}
+                    </Text>
+                  )}
+                </View>
+              </View>
 
-      {/* Step 4 */}
-      <View style={stepStyles.stepCol}>
-        <View style={[
-          stepStyles.stepCircle,
-          currentStep === 4 && stepStyles.stepCircleActive,
-        ]}>
-          <Text style={[
-            stepStyles.stepNumber,
-            currentStep === 4 && stepStyles.stepNumberActive,
-          ]}>
-            4
-          </Text>
-        </View>
-        <Text style={[
-          stepStyles.stepLabel,
-          currentStep === 4 && stepStyles.stepLabelActive,
-        ]}>
-          Review & Submit
-        </Text>
+              {idx < steps.length - 1 && (
+                <View
+                  style={{
+                    height: 1.5,
+                    flex: 1,
+                    backgroundColor: currentStep > s.num ? '#15803D' : '#D1D5DB',
+                    marginTop: -16,
+                    marginHorizontal: 2,
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
       </View>
     </View>
-  </View>
-);
+  );
+};
 
 const roleIconStyles = StyleSheet.create({
   iconBadge: {
@@ -1404,6 +1523,9 @@ function App() {
   const [userRegIsPincodeLoading, setUserRegIsPincodeLoading] = useState(false);
   const [userRegManualAddressOpen, setUserRegManualAddressOpen] = useState(false);
   const [userRegAgreed, setUserRegAgreed] = useState(false);
+  const [userRegLocationConfirmed, setUserRegLocationConfirmed] = useState(false);
+  const [userRegLocationError, setUserRegLocationError] = useState<string | null>(null);
+  const [userRegCountry, setUserRegCountry] = useState('India');
 
   // Service Provider Registration States (Clean, Live DB & Postal API)
   const [providerStep, setProviderStep] = useState<1 | 2 | 3 | 4>(1);
@@ -1414,6 +1536,9 @@ function App() {
   const [provRegMobile, setProvRegMobile] = useState('');
   const [provRegPin, setProvRegPin] = useState('');
   const [provRegLocationDetected, setProvRegLocationDetected] = useState(false);
+  const [provRegLocationConfirmed, setProvRegLocationConfirmed] = useState(false);
+  const [provRegLocationError, setProvRegLocationError] = useState<string | null>(null);
+  const [provRegCountry, setProvRegCountry] = useState('India');
   const [provRegArea, setProvRegArea] = useState('');
   const [provRegCity, setProvRegCity] = useState('');
   const [provRegDistrict, setProvRegDistrict] = useState('');
@@ -1425,7 +1550,7 @@ function App() {
   const [provRegAvailableAreas, setProvRegAvailableAreas] = useState<string[]>([]);
   const [provRegIsPincodeLoading, setProvRegIsPincodeLoading] = useState(false);
   const [provRegManualAddressOpen, setProvRegManualAddressOpen] = useState(false);
-  const [provRegBusinessType, setProvRegBusinessType] = useState('Individual Professional');
+  const [provRegBusinessType, setProvRegBusinessType] = useState('');
   const [provRegAbout, setProvRegAbout] = useState('');
   const [provAadhaarUploaded, setProvAadhaarUploaded] = useState(false);
   const [provPanUploaded, setProvPanUploaded] = useState(false);
@@ -1471,8 +1596,262 @@ function App() {
   ]);
   const [provWorkingHoursFrom, setProvWorkingHoursFrom] = useState('09:00 AM');
   const [provWorkingHoursTo, setProvWorkingHoursTo] = useState('07:00 PM');
+  const [provIsCustomCategory, setProvIsCustomCategory] = useState(false);
+  const [provCustomCategoryName, setProvCustomCategoryName] = useState('');
+  const [provManualServicesList, setProvManualServicesList] = useState<Array<{ name: string; price: string }>>([]);
+  const [provNewServiceName, setProvNewServiceName] = useState('');
+  const [provNewServicePrice, setProvNewServicePrice] = useState('');
+  const [provAccountHolderName, setProvAccountHolderName] = useState('');
+  const [provBankName, setProvBankName] = useState('');
+  const [provAccountNumber, setProvAccountNumber] = useState('');
+  const [provIfscCode, setProvIfscCode] = useState('');
+  const [provUpiId, setProvUpiId] = useState('');
   const [provReviewAgreed, setProvReviewAgreed] = useState(false);
   const [isSubmittingDb, setIsSubmittingDb] = useState(false);
+
+  // Admin Location Master Validation Helpers
+  const validateAndConfirmProviderPin = async (rawPin: string) => {
+    const clean = (rawPin || '').replace(/\D/g, '').trim();
+    if (clean.length !== 6) {
+      setProvRegLocationDetected(false);
+      setProvRegLocationConfirmed(false);
+      setProvRegLocationError('Please enter a valid 6-digit Indian PIN code.');
+      return;
+    }
+    setProvRegIsPincodeLoading(true);
+    setProvRegLocationError(null);
+    const res = await verifyPincodeWithAdmin(clean);
+    setProvRegIsPincodeLoading(false);
+    if (res.serviceable && res.data) {
+      setProvRegCity(res.data.city);
+      setProvRegDistrict(res.data.district || res.data.city);
+      setProvRegState(res.data.state);
+      setProvRegCountry(res.data.country || 'India');
+      setProvRegLocationDetected(true);
+      setProvRegLocationConfirmed(false);
+      setProvRegLocationError(null);
+    } else {
+      setProvRegCity('');
+      setProvRegDistrict('');
+      setProvRegState('');
+      setProvRegLocationDetected(false);
+      setProvRegLocationConfirmed(false);
+      setProvRegLocationError(res.message || `Registration unavailable in PIN code ${clean}. This location is not serviceable.`);
+    }
+  };
+
+  const handleDetectProviderLocationGps = async () => {
+    setProvRegIsPincodeLoading(true);
+    setProvRegLocationError(null);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const { latitude, longitude } = pos.coords;
+              const revRes = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+              );
+              const revData = await revRes.json();
+              const detectedPin = revData?.address?.postcode?.replace(/\D/g, '')?.slice(0, 6);
+              if (detectedPin && detectedPin.length === 6) {
+                setProvRegPin(detectedPin);
+                await validateAndConfirmProviderPin(detectedPin);
+              } else {
+                setProvRegIsPincodeLoading(false);
+                Alert.alert('PIN Code Required', 'Please enter your 6-digit PIN code to verify service location.');
+              }
+            } catch {
+              setProvRegIsPincodeLoading(false);
+              if (provRegPin && provRegPin.replace(/\D/g, '').length === 6) {
+                await validateAndConfirmProviderPin(provRegPin);
+              } else {
+                Alert.alert('Location Detection', 'Please enter your 6-digit Indian PIN code.');
+              }
+            }
+          },
+          () => {
+            setProvRegIsPincodeLoading(false);
+            if (provRegPin && provRegPin.replace(/\D/g, '').length === 6) {
+              validateAndConfirmProviderPin(provRegPin);
+            } else {
+              Alert.alert('Permission Needed', 'Please allow location permission or enter your 6-digit PIN code.');
+            }
+          },
+          { timeout: 8000 }
+        );
+      } else if (provRegPin && provRegPin.replace(/\D/g, '').length === 6) {
+        await validateAndConfirmProviderPin(provRegPin);
+      } else {
+        setProvRegIsPincodeLoading(false);
+        Alert.alert('PIN Code Required', 'Please enter your 6-digit Indian PIN code.');
+      }
+    } catch {
+      setProvRegIsPincodeLoading(false);
+    }
+  };
+
+  const validateAndConfirmUserPin = async (rawPin: string) => {
+    const clean = (rawPin || '').replace(/\D/g, '').trim();
+    if (clean.length !== 6) {
+      setUserRegLocationDetected(false);
+      setUserRegLocationConfirmed(false);
+      setUserRegLocationError('Please enter a valid 6-digit Indian PIN code.');
+      return;
+    }
+    setUserRegIsPincodeLoading(true);
+    setUserRegLocationError(null);
+    const res = await verifyPincodeWithAdmin(clean);
+    setUserRegIsPincodeLoading(false);
+    if (res.serviceable && res.data) {
+      setUserRegCity(res.data.city);
+      setUserRegDistrict(res.data.district || res.data.city);
+      setUserRegState(res.data.state);
+      setUserRegCountry(res.data.country || 'India');
+      setUserRegLocationDetected(true);
+      setUserRegLocationConfirmed(false);
+      setUserRegLocationError(null);
+    } else {
+      setUserRegCity('');
+      setUserRegDistrict('');
+      setUserRegState('');
+      setUserRegLocationDetected(false);
+      setUserRegLocationConfirmed(false);
+      setUserRegLocationError(res.message || `Registration unavailable in PIN code ${clean}. This location is not serviceable.`);
+    }
+  };
+
+  const handleDetectUserLocationGps = async () => {
+    setUserRegIsPincodeLoading(true);
+    setUserRegLocationError(null);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const { latitude, longitude } = pos.coords;
+              const revRes = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+              );
+              const revData = await revRes.json();
+              const detectedPin = revData?.address?.postcode?.replace(/\D/g, '')?.slice(0, 6);
+              if (detectedPin && detectedPin.length === 6) {
+                setUserRegPin(detectedPin);
+                await validateAndConfirmUserPin(detectedPin);
+              } else {
+                setUserRegIsPincodeLoading(false);
+                Alert.alert('PIN Code Required', 'Please enter your 6-digit PIN code to verify location.');
+              }
+            } catch {
+              setUserRegIsPincodeLoading(false);
+              if (userRegPin && userRegPin.replace(/\D/g, '').length === 6) {
+                await validateAndConfirmUserPin(userRegPin);
+              } else {
+                Alert.alert('Location Detection', 'Please enter your 6-digit Indian PIN code.');
+              }
+            }
+          },
+          () => {
+            setUserRegIsPincodeLoading(false);
+            if (userRegPin && userRegPin.replace(/\D/g, '').length === 6) {
+              validateAndConfirmUserPin(userRegPin);
+            } else {
+              Alert.alert('Permission Needed', 'Please allow location permission or enter your 6-digit PIN code.');
+            }
+          },
+          { timeout: 8000 }
+        );
+      } else if (userRegPin && userRegPin.replace(/\D/g, '').length === 6) {
+        await validateAndConfirmUserPin(userRegPin);
+      } else {
+        setUserRegIsPincodeLoading(false);
+        Alert.alert('PIN Code Required', 'Please enter your 6-digit Indian PIN code.');
+      }
+    } catch {
+      setUserRegIsPincodeLoading(false);
+    }
+  };
+
+  // Silent Draft Storage Helpers (No annoying alert/toast messages)
+  const saveProviderDraftSilently = (customStep?: number) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const draft = {
+          provRegName,
+          provRegBusinessName,
+          provRegCategory,
+          provRegEmail,
+          provRegMobile,
+          provRegPin,
+          provRegArea,
+          provRegCity,
+          provRegDistrict,
+          provRegState,
+          provRegHouse,
+          provRegBuilding,
+          provRegStreet,
+          provRegLandmark,
+          provRegBusinessType,
+          provRegAbout,
+          provGoogleMapsLink,
+          provRegServices,
+          provAvailableDays,
+          provWorkingHoursFrom,
+          provWorkingHoursTo,
+          provIsCustomCategory,
+          provCustomCategoryName,
+          provManualServicesList,
+          provAccountHolderName,
+          provBankName,
+          provAccountNumber,
+          provIfscCode,
+          provUpiId,
+          savedStep: customStep !== undefined ? customStep : providerStep,
+        };
+        window.localStorage.setItem('@qa_provider_reg_draft', JSON.stringify(draft));
+      }
+    } catch {}
+  };
+
+  const loadProviderDraftSilently = () => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem('@qa_provider_reg_draft');
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.provRegName) setProvRegName(d.provRegName);
+          if (d.provRegBusinessName) setProvRegBusinessName(d.provRegBusinessName);
+          if (d.provRegCategory) setProvRegCategory(d.provRegCategory);
+          if (d.provRegEmail) setProvRegEmail(d.provRegEmail);
+          if (d.provRegMobile) setProvRegMobile(d.provRegMobile);
+          if (d.provRegPin) setProvRegPin(d.provRegPin);
+          if (d.provRegArea) setProvRegArea(d.provRegArea);
+          if (d.provRegCity) setProvRegCity(d.provRegCity);
+          if (d.provRegDistrict) setProvRegDistrict(d.provRegDistrict);
+          if (d.provRegState) setProvRegState(d.provRegState);
+          if (d.provRegHouse) setProvRegHouse(d.provRegHouse);
+          if (d.provRegBuilding) setProvRegBuilding(d.provRegBuilding);
+          if (d.provRegStreet) setProvRegStreet(d.provRegStreet);
+          if (d.provRegLandmark) setProvRegLandmark(d.provRegLandmark);
+          if (d.provRegBusinessType) setProvRegBusinessType(d.provRegBusinessType);
+          if (d.provRegAbout) setProvRegAbout(d.provRegAbout);
+          if (d.provGoogleMapsLink) setProvGoogleMapsLink(d.provGoogleMapsLink);
+          if (d.provRegServices) setProvRegServices(d.provRegServices);
+          if (d.provAvailableDays) setProvAvailableDays(d.provAvailableDays);
+          if (d.provWorkingHoursFrom) setProvWorkingHoursFrom(d.provWorkingHoursFrom);
+          if (d.provWorkingHoursTo) setProvWorkingHoursTo(d.provWorkingHoursTo);
+          if (d.provIsCustomCategory !== undefined) setProvIsCustomCategory(d.provIsCustomCategory);
+          if (d.provCustomCategoryName) setProvCustomCategoryName(d.provCustomCategoryName);
+          if (d.provManualServicesList) setProvManualServicesList(d.provManualServicesList);
+          if (d.provAccountHolderName) setProvAccountHolderName(d.provAccountHolderName);
+          if (d.provBankName) setProvBankName(d.provBankName);
+          if (d.provAccountNumber) setProvAccountNumber(d.provAccountNumber);
+          if (d.provIfscCode) setProvIfscCode(d.provIfscCode);
+          if (d.provUpiId) setProvUpiId(d.provUpiId);
+        }
+      }
+    } catch {}
+  };
 
   // General App & Auth States
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1652,12 +2031,161 @@ function App() {
     }
   };
 
-  const triggerDocPicker = (
+  const requestCameraPermission = async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'Camera Permission Required',
+            message: 'Quick Appointments needs access to your camera to capture workplace/premise photos and verification documents.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn('Camera permission request error:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const triggerDocPicker = async (
     source: 'camera' | 'gallery' | 'file',
     target: 'aadhaar' | 'pan' | 'exp' | 'premise'
   ) => {
     setUploadModalVisible(false);
 
+    // 1. Native Mobile Flow (React Native Android / iOS via expo-image-picker)
+    if (Platform.OS !== 'web') {
+      try {
+        setIsCompressingHd(true);
+
+        if (source === 'camera') {
+          // Request Camera permissions
+          let hasPermission = false;
+          try {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            hasPermission = perm.granted;
+          } catch (e) {
+            console.warn('Expo camera permission error:', e);
+          }
+
+          if (!hasPermission) {
+            hasPermission = await requestCameraPermission();
+          }
+
+          if (!hasPermission) {
+            Alert.alert(
+              'Camera Access Denied',
+              'Camera permission is required to take workplace photos. Please enable camera access in your device Settings.'
+            );
+            setIsCompressingHd(false);
+            return;
+          }
+
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.85,
+            base64: true,
+          });
+
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+            const sizeKb = asset.fileSize ? Math.round(asset.fileSize / 1024) : 340;
+
+            applyUploadedDoc(target, {
+              dataUrl,
+              fileName: asset.fileName || `${target}_camera_${Date.now()}.jpg`,
+              fileSizeKb: sizeKb,
+              type:
+                target === 'aadhaar'
+                  ? 'AADHAAR'
+                  : target === 'pan'
+                  ? 'PAN'
+                  : target === 'exp'
+                  ? 'WORK_EXPERIENCE'
+                  : 'PREMISE_PHOTO',
+              label:
+                target === 'premise'
+                  ? `Premise Photo ${provPremisePhotos.length + 1}`
+                  : undefined,
+            });
+          }
+        } else {
+          // Photo Gallery / Files flow
+          let hasPermission = false;
+          try {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            hasPermission = perm.granted;
+          } catch (e) {
+            console.warn('Expo media library permission error:', e);
+          }
+
+          if (!hasPermission && Platform.OS === 'android') {
+            try {
+              const perm = (Platform.Version as number) >= 33
+                ? (PermissionsAndroid.PERMISSIONS as any).READ_MEDIA_IMAGES
+                : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+              if (perm) {
+                const res = await PermissionsAndroid.request(perm, {
+                  title: 'Photo Library Permission Required',
+                  message: 'Quick Appointments needs access to your photos to upload workplace images.',
+                  buttonPositive: 'Allow',
+                  buttonNegative: 'Deny',
+                });
+                hasPermission = res === PermissionsAndroid.RESULTS.GRANTED;
+              }
+            } catch (e) {
+              console.warn('Storage permission error:', e);
+            }
+          }
+
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.85,
+            base64: true,
+          });
+
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+            const sizeKb = asset.fileSize ? Math.round(asset.fileSize / 1024) : 280;
+
+            applyUploadedDoc(target, {
+              dataUrl,
+              fileName: asset.fileName || `${target}_gallery_${Date.now()}.jpg`,
+              fileSizeKb: sizeKb,
+              type:
+                target === 'aadhaar'
+                  ? 'AADHAAR'
+                  : target === 'pan'
+                  ? 'PAN'
+                  : target === 'exp'
+                  ? 'WORK_EXPERIENCE'
+                  : 'PREMISE_PHOTO',
+              label:
+                target === 'premise'
+                  ? `Premise Photo ${provPremisePhotos.length + 1}`
+                  : undefined,
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error('Native photo picker error:', err);
+        Alert.alert('Upload Error', err?.message || 'Could not open camera or photos. Please verify device permissions.');
+      } finally {
+        setIsCompressingHd(false);
+      }
+      return;
+    }
+
+    // 2. Web Browser DOM Flow (Fallback for web preview)
     if (typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -1751,32 +2279,6 @@ function App() {
         }
       };
       input.click();
-    } else {
-      // Pure React Native fallback (Hermes)
-      const sampleKb = target === 'premise' ? 340 : target === 'aadhaar' ? 290 : 315;
-      const sampleUrl =
-        'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=800&q=80';
-      applyUploadedDoc(target, {
-        dataUrl: sampleUrl,
-        fileName: `${target}_hd_verified.jpg`,
-        fileSizeKb: sampleKb,
-        type:
-          target === 'aadhaar'
-            ? 'AADHAAR'
-            : target === 'pan'
-            ? 'PAN'
-            : target === 'exp'
-            ? 'WORK_EXPERIENCE'
-            : 'PREMISE_PHOTO',
-        label:
-          target === 'premise'
-            ? `Premise Photo ${provPremisePhotos.length + 1}`
-            : undefined,
-      });
-      Alert.alert(
-        'HD Document Attached',
-        `${target.toUpperCase()} compressed with HD clarity (${sampleKb} KB).`
-      );
     }
   };
 
@@ -1827,6 +2329,11 @@ function App() {
       fileSizeKb: number;
       type: string;
     } | null;
+    accountHolderName?: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+    ifscCode?: string;
+    upiId?: string;
   }) => {
     try {
       setIsSubmittingDb(true);
@@ -1892,6 +2399,8 @@ function App() {
               businessType: providerData.businessType,
               category: providerData.category,
               city: providerData.city,
+              state: providerData.state,
+              district: providerData.district,
               pincode: providerData.pin,
               address: formattedAddress,
               bio: providerData.about,
@@ -1901,6 +2410,11 @@ function App() {
               premisePhotos: (providerData.premisePhotos || []).map((p) => p.dataUrl),
               serviceIds: providerData.serviceIds || [],
               documents: backendDocuments,
+              accountHolderName: providerData.accountHolderName,
+              bankName: providerData.bankName,
+              bankAccountNumber: providerData.bankAccountNumber,
+              ifscCode: providerData.ifscCode,
+              upiId: providerData.upiId,
             }),
           });
           if (apiRes.ok) {
@@ -1955,6 +2469,11 @@ function App() {
       setCustomerCity(selectedCityName);
     }
   }, [selectedCityName]);
+
+  // Restore provider registration draft if available
+  useEffect(() => {
+    loadProviderDraftSilently();
+  }, []);
 
   // Customer State
   const [customerTab, setCustomerTab] = useState<'home' | 'search' | 'bookings' | 'favorites' | 'profile' | 'all_categories' | 'category_detail'>('home');
@@ -2379,23 +2898,6 @@ function App() {
               />
             </View>
 
-            {/* Use My Current Location Action Button (Image 1) */}
-            <TouchableOpacity
-              style={styles.useCurrentLocationBox}
-              onPress={() => {
-                setSelectedCityName('Hyderabad');
-                Alert.alert('Location Detected', 'Set current location to Hyderabad, Telangana.');
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 18, color: '#2E9E1E' }}>◎</Text>
-                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1B5E20' }}>
-                  Use my current location
-                </Text>
-              </View>
-              <Text style={{ fontSize: 18, color: '#2E9E1E', fontWeight: 'bold' }}>›</Text>
-            </TouchableOpacity>
 
             {/* Popular Cities Header Row with Admin Managed Badge */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 12 }}>
@@ -2715,138 +3217,227 @@ function App() {
     // 2. CHOOSE YOUR ACCOUNT TYPE SCREEN (Separate Dedicated Account Type Selection Screen)
     if (authStep === 'choose_account_type' || authStep === 'role_select') {
       return (
-        <SafeAreaView style={styles.authContainer}>
-          <RNStatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <SafeAreaView style={[styles.authContainer, { backgroundColor: '#FFFFFF' }]}>
+          <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <ScrollView
-            contentContainerStyle={authStyles.scrollContainer}
+            contentContainerStyle={[authStyles.scrollContainer, { justifyContent: 'space-between', flexGrow: 1, paddingBottom: 24 }]}
             showsVerticalScrollIndicator={false}
           >
-            {/* Top Navigation Row */}
-            <View style={authStyles.topNavRow}>
-              <TouchableOpacity
-                onPress={() => setAuthStep('login')}
-                style={authStyles.backBtn}
-                activeOpacity={0.7}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={authStyles.backBtnText}>←</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }} />
-              <View style={{ width: 44, height: 44 }} />
-            </View>
+            <View>
+              {/* Circular White Back Button with Elevation */}
+              <View style={{ marginBottom: 16 }}>
+                <TouchableOpacity
+                  onPress={() => setAuthStep('login')}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={{ fontSize: 20, color: '#111111', fontWeight: 'bold' }}>←</Text>
+                </TouchableOpacity>
+              </View>
 
-            {/* Title & Subtitle */}
-            <View style={{ marginTop: 8, marginBottom: 24 }}>
-              <Text style={authStyles.screenTitle}>Create an Account</Text>
-              <Text style={authStyles.screenSubtitle}>
-                Select your account type to get started with Quick Appointments
-              </Text>
-            </View>
+              {/* Title & Subtitle with Green Decorative Arc */}
+              <View style={{ alignItems: 'center', marginBottom: 28 }}>
+                <Text style={{ fontSize: 30, fontWeight: '900', color: '#0B1E13', textAlign: 'center' }}>
+                  Create an Account
+                </Text>
+                <View style={{ width: 64, height: 4, backgroundColor: '#22C55E', borderRadius: 2, marginTop: 8, marginBottom: 10 }} />
+                <Text style={{ fontSize: 14, color: '#4B5563', fontWeight: '500', textAlign: 'center' }}>
+                  Choose your account type to get started.
+                </Text>
+              </View>
 
-            {/* Selectable Account Type Cards */}
-            <View style={authStyles.rolesContainer}>
-              {/* Option 1: General User */}
-              <TouchableOpacity
-                style={[
-                  authStyles.roleCard,
-                  selectedRoleType === 'customer' && authStyles.roleCardSelected,
-                ]}
-                onPress={() => setSelectedRoleType('customer')}
-                activeOpacity={0.8}
-              >
-                <View style={authStyles.roleInfoCol}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 }}>
-                    <Text style={authStyles.roleTitle}>General User</Text>
-                    <View style={{ backgroundColor: selectedRoleType === 'customer' ? '#DCFCE7' : '#E2E8F0', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 10, color: selectedRoleType === 'customer' ? '#15803D' : '#334155', fontWeight: 'bold' }}>CUSTOMER</Text>
+              {/* Selectable Account Type Cards */}
+              <View style={{ gap: 14 }}>
+                {/* Option 1: General User */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 20,
+                    borderWidth: selectedRoleType === 'customer' ? 2 : 1,
+                    borderColor: selectedRoleType === 'customer' ? '#16A34A' : '#E5E7EB',
+                    padding: 18,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: selectedRoleType === 'customer' ? 0.04 : 0.02,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                  onPress={() => setSelectedRoleType('customer')}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+                    {/* Mint Green Squircle Icon Box */}
+                    <View style={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: 18,
+                      backgroundColor: '#E8F7E4',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 14,
+                    }}>
+                      <Text style={{ fontSize: 24 }}>👤</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#111111' }}>General User</Text>
+                        <View style={{ backgroundColor: '#E5E7EB', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                          <Text style={{ fontSize: 11, color: '#4B5563', fontWeight: '600' }}>Customer</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
+                        Discover, book and manage services easily.
+                      </Text>
                     </View>
                   </View>
-                  <View style={{ gap: 4, marginTop: 4 }}>
-                    <Text style={authStyles.roleBulletText}>• For customers who want to discover and book services</Text>
-                    <Text style={authStyles.roleBulletText}>• Browse available services and service providers</Text>
-                    <Text style={authStyles.roleBulletText}>• Book appointments seamlessly</Text>
-                    <Text style={authStyles.roleBulletText}>• Manage bookings, payments and profiles</Text>
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: selectedRoleType === 'customer' ? 0 : 2,
+                      borderColor: '#D1D5DB',
+                      backgroundColor: selectedRoleType === 'customer' ? '#15803D' : '#FFFFFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {selectedRoleType === 'customer' && (
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' }}>✓</Text>
+                    )}
                   </View>
-                </View>
-                <View
-                  style={[
-                    authStyles.roleRadio,
-                    selectedRoleType === 'customer' && authStyles.roleRadioSelected,
-                  ]}
-                >
-                  {selectedRoleType === 'customer' && (
-                    <Text style={authStyles.roleCheckmark}>✓</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Option 2: Service Provider */}
-              <TouchableOpacity
-                style={[
-                  authStyles.roleCard,
-                  selectedRoleType === 'provider' && authStyles.roleCardSelected,
-                ]}
-                onPress={() => setSelectedRoleType('provider')}
-                activeOpacity={0.8}
-              >
-                <View style={authStyles.roleInfoCol}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 }}>
-                    <Text style={authStyles.roleTitle}>Service Provider</Text>
-                    <View style={{ backgroundColor: selectedRoleType === 'provider' ? '#DCFCE7' : '#E2E8F0', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 10, color: selectedRoleType === 'provider' ? '#15803D' : '#334155', fontWeight: 'bold' }}>SERVICE PROVIDER</Text>
+                {/* Option 2: Service Provider */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 20,
+                    borderWidth: selectedRoleType === 'provider' ? 2 : 1,
+                    borderColor: selectedRoleType === 'provider' ? '#16A34A' : '#E5E7EB',
+                    padding: 18,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: selectedRoleType === 'provider' ? 0.04 : 0.02,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                  onPress={() => setSelectedRoleType('provider')}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+                    {/* Mint Green Squircle Icon Box */}
+                    <View style={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: 18,
+                      backgroundColor: '#E8F7E4',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 14,
+                    }}>
+                      <Text style={{ fontSize: 24 }}>🏪</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#111111' }}>Service Provider</Text>
+                        <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                          <Text style={{ fontSize: 11, color: '#15803D', fontWeight: '700' }}>Provider</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6B7280', lineHeight: 17 }}>
+                        Register, list your services and manage appointments.
+                      </Text>
                     </View>
                   </View>
-                  <View style={{ gap: 4, marginTop: 4 }}>
-                    <Text style={authStyles.roleBulletText}>• For individuals or businesses who want to offer their services</Text>
-                    <Text style={authStyles.roleBulletText}>• Register as a service provider</Text>
-                    <Text style={authStyles.roleBulletText}>• Create and manage their professional profile</Text>
-                    <Text style={authStyles.roleBulletText}>• Add services and manage pricing</Text>
-                    <Text style={authStyles.roleBulletText}>• Receive and manage customer appointments</Text>
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: selectedRoleType === 'provider' ? 0 : 2,
+                      borderColor: '#D1D5DB',
+                      backgroundColor: selectedRoleType === 'provider' ? '#15803D' : '#FFFFFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {selectedRoleType === 'provider' && (
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' }}>✓</Text>
+                    )}
                   </View>
-                </View>
-                <View
-                  style={[
-                    authStyles.roleRadio,
-                    selectedRoleType === 'provider' && authStyles.roleRadioSelected,
-                  ]}
-                >
-                  {selectedRoleType === 'provider' && (
-                    <Text style={authStyles.roleCheckmark}>✓</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flex: 1, minHeight: 32 }} />
-
-            {/* Footer Terms */}
-            <View style={[authStyles.footerBox, { marginBottom: 16 }]}>
-              <Text style={authStyles.footerText}>By continuing, you agree to our</Text>
-              <View style={authStyles.footerLinkRow}>
-                <Text style={authStyles.footerLink}>Terms & Conditions</Text>
-                <Text style={authStyles.footerText}> and </Text>
-                <Text style={authStyles.footerLink}>Privacy Policy</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            {/* Continue Button */}
-            <TouchableOpacity
-              style={authStyles.primaryPillBtn}
-              onPress={() => {
-                if (selectedRoleType === 'customer') {
-                  setAuthStep('register_user');
-                } else {
-                  setAuthStep('register_provider');
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={authStyles.primaryPillBtnText}>
-                {selectedRoleType === 'customer' ? 'Continue as General User' : 'Continue as Service Provider'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ marginTop: 24 }}>
+              {/* Footer Terms */}
+              <View style={{ alignItems: 'center', marginBottom: 18 }}>
+                <Text style={{ fontSize: 12, color: '#4B5563', textAlign: 'center', lineHeight: 18 }}>
+                  By continuing, you agree to our{'\n'}
+                  <Text style={{ color: '#15803D', fontWeight: 'bold', textDecorationLine: 'underline' }}>
+                    Terms & Conditions
+                  </Text>
+                  {' and '}
+                  <Text style={{ color: '#15803D', fontWeight: 'bold', textDecorationLine: 'underline' }}>
+                    Privacy Policy
+                  </Text>
+                  .
+                </Text>
+              </View>
 
-            <View style={{ height: 20 }} />
+              {/* Continue Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#15803D',
+                  borderRadius: 30,
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#15803D',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+                onPress={() => {
+                  if (selectedRoleType === 'customer') {
+                    setAuthStep('register_user');
+                  } else {
+                    setAuthStep('register_provider');
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', marginRight: 8 }}>
+                  {selectedRoleType === 'customer'
+                    ? 'Continue as General User'
+                    : 'Continue as Service Provider'}
+                </Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>→</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
 
           {/* Organic Mint Bottom Curves */}
@@ -2938,7 +3529,7 @@ function App() {
               onChangeText={setUserRegEmail}
             />
 
-            {/* Field 4: PIN Code * with Live Postal API Lookup */}
+            {/* Field 4: PIN Code * with Admin-Controlled Master Verification */}
             <Text style={authStyles.cleanFieldLabel}>PIN Code *</Text>
             <View style={authStyles.cleanDetectRow}>
               <TextInput
@@ -2948,49 +3539,21 @@ function App() {
                 keyboardType="number-pad"
                 maxLength={6}
                 value={userRegPin}
-                onChangeText={async (pin) => {
+                onChangeText={(pin) => {
                   setUserRegPin(pin);
                   const clean = pin.replace(/\D/g, '');
                   if (clean.length === 6) {
-                    setUserRegIsPincodeLoading(true);
-                    const res = await fetchPostalLocation(clean);
-                    setUserRegIsPincodeLoading(false);
-                    if (res.success && res.data) {
-                      setUserRegCity(res.data.city);
-                      setUserRegDistrict(res.data.district);
-                      setUserRegState(res.data.state);
-                      setUserRegArea(res.data.primaryArea);
-                      setUserRegAvailableAreas(res.data.areas);
-                      setUserRegLocationDetected(true);
-                    } else if (res.error) {
-                      Alert.alert('Postal Lookup', res.error);
-                    }
+                    validateAndConfirmUserPin(clean);
+                  } else {
+                    setUserRegLocationConfirmed(false);
+                    setUserRegLocationDetected(false);
+                    setUserRegLocationError(null);
                   }
                 }}
               />
               <TouchableOpacity
                 style={authStyles.cleanDetectBtn}
-                onPress={async () => {
-                  const clean = (userRegPin || '').replace(/\D/g, '');
-                  if (clean.length !== 6) {
-                    Alert.alert('PIN Code Required', 'Please enter a 6-digit PIN code to detect location.');
-                    return;
-                  }
-                  setUserRegIsPincodeLoading(true);
-                  const res = await fetchPostalLocation(clean);
-                  setUserRegIsPincodeLoading(false);
-                  if (res.success && res.data) {
-                    setUserRegCity(res.data.city);
-                    setUserRegDistrict(res.data.district);
-                    setUserRegState(res.data.state);
-                    setUserRegArea(res.data.primaryArea);
-                    setUserRegAvailableAreas(res.data.areas);
-                    setUserRegLocationDetected(true);
-                    Alert.alert('Location Detected', `${res.data.city}, ${res.data.state}`);
-                  } else {
-                    Alert.alert('Postal Lookup', res.error || 'Could not detect location for this PIN code.');
-                  }
-                }}
+                onPress={handleDetectUserLocationGps}
                 activeOpacity={0.8}
               >
                 {userRegIsPincodeLoading ? (
@@ -3001,26 +3564,114 @@ function App() {
               </TouchableOpacity>
             </View>
 
-            {/* Location Detected Summary Card */}
-            {userRegLocationDetected && (
-              <View style={[authStyles.locationDetectedCard, { marginTop: 10 }]}>
-                <View style={authStyles.detectedCheckCircle}>
-                  <Text style={authStyles.detectedCheckmark}>✓</Text>
+            {/* Location Identified Confirmation Box */}
+            {userRegLocationDetected && userRegCity && (
+              <View style={{
+                backgroundColor: '#F0FDF4',
+                borderWidth: 1,
+                borderColor: '#BBF7D0',
+                borderRadius: 16,
+                padding: 14,
+                marginTop: 10,
+                marginBottom: 4,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#16A34A' }} />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#14532D', letterSpacing: 0.5 }}>
+                      LOCATION IDENTIFIED
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803D' }}>Verified Service Area</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={authStyles.detectedTitle}>Location Detected</Text>
-                  <Text style={authStyles.detectedSubtitle}>
-                    {userRegArea ? `${userRegArea}, ` : ''}{userRegCity}, {userRegState} - {userRegPin}
-                  </Text>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
+                  <View style={{ width: '50%' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>PIN Code:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{userRegPin}</Text>
+                  </View>
+                  <View style={{ width: '50%' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>City:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{userRegCity}</Text>
+                  </View>
+                  <View style={{ width: '50%' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>State:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{userRegState}</Text>
+                  </View>
+                  <View style={{ width: '50%' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>District:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{userRegDistrict || userRegCity}</Text>
+                  </View>
                 </View>
-                <TouchableOpacity
-                  onPress={() => setUserRegManualAddressOpen(!userRegManualAddressOpen)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={authStyles.detectedEditText}>
-                    {userRegManualAddressOpen ? 'Close Edit' : 'Edit Address'}
+
+                <View style={{ borderTopWidth: 1, borderTopColor: '#DCFCE7', paddingTop: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534', marginBottom: 8 }}>
+                    Is this your service location?
                   </Text>
-                </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#D1D5DB',
+                        borderRadius: 12,
+                        paddingVertical: 9,
+                        alignItems: 'center',
+                      }}
+                      onPress={() => {
+                        setUserRegPin('');
+                        setUserRegCity('');
+                        setUserRegDistrict('');
+                        setUserRegState('');
+                        setUserRegLocationDetected(false);
+                        setUserRegLocationConfirmed(false);
+                        setUserRegLocationError(null);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Change PIN Code</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: userRegLocationConfirmed ? '#166534' : '#15803D',
+                        borderRadius: 12,
+                        paddingVertical: 9,
+                        alignItems: 'center',
+                      }}
+                      onPress={() => setUserRegLocationConfirmed(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                        {userRegLocationConfirmed ? '✓ Location Confirmed' : 'Confirm Location'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Unavailable Location Error Banner */}
+            {userRegLocationError && (
+              <View style={{
+                backgroundColor: '#FFF1F2',
+                borderWidth: 1,
+                borderColor: '#FECDD3',
+                borderRadius: 16,
+                padding: 12,
+                marginTop: 10,
+                marginBottom: 4,
+              }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#9F1239', marginBottom: 2 }}>
+                  Registration Unavailable in this Location
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#BE123C' }}>
+                  {userRegLocationError}
+                </Text>
               </View>
             )}
 
@@ -3168,6 +3819,10 @@ function App() {
                 const cleanPin = (userRegPin || '').replace(/\D/g, '');
                 if (cleanPin.length !== 6) {
                   Alert.alert('PIN Code Required', 'Please enter a valid 6-digit PIN code.');
+                  return;
+                }
+                if (!userRegLocationConfirmed) {
+                  Alert.alert('Location Confirmation Required', 'Please verify and confirm your service location before creating an account.');
                   return;
                 }
                 if (!userRegAgreed) {
@@ -3411,10 +4066,10 @@ function App() {
     // 6. SERVICE PROVIDER REGISTRATION SCREEN (4-Step Flow, Live Postal API, Dynamic DB Categories)
     if (authStep === 'register_provider') {
       return (
-        <SafeAreaView style={styles.authContainer}>
-          <RNStatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <SafeAreaView style={[styles.authContainer, { backgroundColor: '#FFFFFF' }]}>
+          <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <ScrollView
-            contentContainerStyle={authStyles.scrollContainer}
+            contentContainerStyle={[authStyles.scrollContainer, { backgroundColor: '#FFFFFF' }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -3435,7 +4090,20 @@ function App() {
                 <Text style={authStyles.backBtnText}>←</Text>
               </TouchableOpacity>
               <View style={{ flex: 1 }} />
-              <View style={{ width: 44, height: 44 }} />
+              <TouchableOpacity
+                onPress={() => saveProviderDraftSilently(providerStep)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 16,
+                  backgroundColor: '#F3F4F6',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>Save Draft</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Title & Subtitle */}
@@ -3452,87 +4120,181 @@ function App() {
             {/* ================= STEP 1: BASIC DETAILS ================= */}
             {providerStep === 1 && (
               <View>
-                <Text style={authStyles.cleanFieldLabel}>Full Name *</Text>
-                <TextInput
-                  style={authStyles.cleanTextInputBox}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="#94A3B8"
-                  value={provRegName}
-                  onChangeText={setProvRegName}
-                />
-
-                <Text style={authStyles.cleanFieldLabel}>Mobile Number *</Text>
-                <View style={authStyles.cleanPhoneInputBox}>
-                  <View style={authStyles.cleanPrefixBadge}>
-                    <Text style={authStyles.cleanPrefixText}>+91</Text>
-                  </View>
+                {/* Full Name * */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    Full Name <Text style={{ color: '#EF4444' }}>*</Text>
+                  </Text>
                   <TextInput
-                    style={authStyles.cleanPhoneInput}
-                    placeholder="Enter 10-digit mobile number"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={provRegMobile}
-                    onChangeText={setProvRegMobile}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      height: 48,
+                      fontSize: 14,
+                      color: '#111111',
+                      fontWeight: '500',
+                    }}
+                    placeholder="Enter your full name"
+                    placeholderTextColor="#9CA3AF"
+                    value={provRegName}
+                    onChangeText={setProvRegName}
                   />
                 </View>
 
-                <Text style={authStyles.cleanFieldLabel}>Email Address *</Text>
-                <TextInput
-                  style={authStyles.cleanTextInputBox}
-                  placeholder="name@business.com"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={provRegEmail}
-                  onChangeText={setProvRegEmail}
-                />
-
-                <Text style={authStyles.cleanFieldLabel}>Business / Service Name *</Text>
-                <TextInput
-                  style={authStyles.cleanTextInputBox}
-                  placeholder="e.g. Apex Styling Studio"
-                  placeholderTextColor="#94A3B8"
-                  value={provRegBusinessName}
-                  onChangeText={setProvRegBusinessName}
-                />
-
-                <Text style={authStyles.cleanFieldLabel}>Business Entity Type *</Text>
-                <View style={authStyles.areaPillsWrap}>
-                  {['Individual Professional', 'Agency / Firm', 'Salon / Clinic', 'Home Service Provider'].map((type) => {
-                    const isSelected = provRegBusinessType === type;
-                    return (
-                      <TouchableOpacity
-                        key={type}
-                        style={[authStyles.areaPillItem, isSelected && authStyles.areaPillItemSelected]}
-                        onPress={() => setProvRegBusinessType(type)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[authStyles.areaPillText, isSelected && authStyles.areaPillTextSelected]}>
-                          {type}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                {/* Mobile Number * */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    Mobile Number <Text style={{ color: '#EF4444' }}>*</Text>
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 14,
+                    backgroundColor: '#FFFFFF',
+                    paddingHorizontal: 16,
+                    height: 48,
+                  }}>
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#111111', paddingRight: 12, marginRight: 12, borderRightWidth: 1, borderRightColor: '#E5E7EB' }}>
+                      +91
+                    </Text>
+                    <TextInput
+                      style={{ flex: 1, fontSize: 14, color: '#111111', fontWeight: '500' }}
+                      placeholder="Enter 10-digit mobile number"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                      value={provRegMobile}
+                      onChangeText={setProvRegMobile}
+                    />
+                  </View>
                 </View>
 
-                <Text style={authStyles.cleanFieldLabel}>About Your Practice / Business (Optional)</Text>
-                <TextInput
-                  style={[authStyles.cleanTextInputBox, { height: 76, textAlignVertical: 'top', paddingTop: 10 }]}
-                  placeholder="Describe your services, specialization, and experience"
-                  placeholderTextColor="#94A3B8"
-                  multiline
-                  maxLength={250}
-                  value={provRegAbout}
-                  onChangeText={setProvRegAbout}
-                />
-                <Text style={{ alignSelf: 'flex-end', fontSize: 11, color: '#94A3B8', marginTop: 2, marginBottom: 12 }}>
-                  {provRegAbout.length}/250
-                </Text>
+                {/* Email Address (Optional) */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    Email Address <Text style={{ fontSize: 12, fontWeight: 'normal', color: '#6B7280' }}>(Optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      height: 48,
+                      fontSize: 14,
+                      color: '#111111',
+                      fontWeight: '500',
+                    }}
+                    placeholder="name@business.com"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={provRegEmail}
+                    onChangeText={setProvRegEmail}
+                  />
+                </View>
+
+                {/* Business / Service Name * */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    Business / Service Name <Text style={{ color: '#EF4444' }}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      height: 48,
+                      fontSize: 14,
+                      color: '#111111',
+                      fontWeight: '500',
+                    }}
+                    placeholder="e.g. Apex Styling Studio"
+                    placeholderTextColor="#9CA3AF"
+                    value={provRegBusinessName}
+                    onChangeText={setProvRegBusinessName}
+                  />
+                </View>
+
+                {/* Business Entity Type * */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    Business Entity Type <Text style={{ color: '#EF4444' }}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      height: 48,
+                      fontSize: 14,
+                      color: '#111111',
+                      fontWeight: '500',
+                    }}
+                    placeholder="e.g. Individual Professional, Sole Proprietorship, LLP"
+                    placeholderTextColor="#9CA3AF"
+                    value={provRegBusinessType}
+                    onChangeText={setProvRegBusinessType}
+                  />
+                </View>
+
+                {/* About Your Practice / Business (Optional) */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                    About Your Practice / Business <Text style={{ fontSize: 12, fontWeight: 'normal', color: '#6B7280' }}>(Optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      minHeight: 88,
+                      fontSize: 13.5,
+                      color: '#111111',
+                      textAlignVertical: 'top',
+                    }}
+                    placeholder="Describe your services, specialization, and experience"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    maxLength={250}
+                    value={provRegAbout}
+                    onChangeText={setProvRegAbout}
+                  />
+                  <Text style={{ alignSelf: 'flex-end', fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
+                    {provRegAbout.length}/250
+                  </Text>
+                </View>
 
                 {/* Continue Button */}
                 <TouchableOpacity
-                  style={[authStyles.primaryPillBtn, { marginTop: 14 }]}
+                  style={{
+                    backgroundColor: '#15803D',
+                    borderRadius: 30,
+                    paddingVertical: 16,
+                    paddingHorizontal: 24,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 8,
+                    shadowColor: '#15803D',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
                   onPress={async () => {
                     if (!provRegName.trim()) {
                       Alert.alert('Required Field', 'Please enter your full name.');
@@ -3543,12 +4305,17 @@ function App() {
                       Alert.alert('Invalid Mobile', 'Please enter a valid 10-digit mobile number.');
                       return;
                     }
-                    if (!provRegEmail.trim()) {
-                      Alert.alert('Required Field', 'Please enter your email address.');
+                    // Email is optional, validate format only if provided
+                    if (provRegEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(provRegEmail.trim())) {
+                      Alert.alert('Invalid Email', 'Please enter a valid email address, or leave it blank.');
                       return;
                     }
                     if (!provRegBusinessName.trim()) {
                       Alert.alert('Required Field', 'Please enter your business or service name.');
+                      return;
+                    }
+                    if (!provRegBusinessType.trim()) {
+                      Alert.alert('Required Field', 'Please enter your business entity type.');
                       return;
                     }
 
@@ -3574,11 +4341,15 @@ function App() {
                       return;
                     }
 
+                    saveProviderDraftSilently(2);
                     setProviderStep(2);
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={authStyles.primaryPillBtnText}>Continue to Location & Address</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', marginRight: 8 }}>
+                    Continue to Location & Address
+                  </Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>→</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -3586,364 +4357,529 @@ function App() {
             {/* ================= STEP 2: LOCATION & ADDRESS ================= */}
             {providerStep === 2 && (
               <View>
-                <Text style={provStepStyles.sectionTitle}>Service Location & Address</Text>
-
-                <Text style={authStyles.cleanFieldLabel}>PIN Code *</Text>
-                <View style={authStyles.cleanDetectRow}>
-                  <TextInput
-                    style={[authStyles.cleanTextInputBox, { flex: 1 }]}
-                    placeholder="Enter 6-digit Indian PIN code"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={provRegPin}
-                    onChangeText={async (pin) => {
-                      setProvRegPin(pin);
-                      const clean = pin.replace(/\D/g, '');
-                      if (clean.length === 6) {
-                        setProvRegIsPincodeLoading(true);
-                        const res = await fetchPostalLocation(clean);
-                        setProvRegIsPincodeLoading(false);
-                        if (res.success && res.data) {
-                          setProvRegCity(res.data.city);
-                          setProvRegDistrict(res.data.district);
-                          setProvRegState(res.data.state);
-                          setProvRegArea(res.data.primaryArea);
-                          setProvRegAvailableAreas(res.data.areas);
-                          setProvRegLocationDetected(true);
-                        } else if (res.error) {
-                          Alert.alert('Postal Lookup', res.error);
-                        }
-                      }
-                    }}
-                  />
-                  <TouchableOpacity
-                    style={authStyles.cleanDetectBtn}
-                    onPress={async () => {
-                      const clean = (provRegPin || '').replace(/\D/g, '');
-                      if (clean.length !== 6) {
-                        Alert.alert('PIN Code Required', 'Please enter a 6-digit PIN code.');
-                        return;
-                      }
-                      setProvRegIsPincodeLoading(true);
-                      const res = await fetchPostalLocation(clean);
-                      setProvRegIsPincodeLoading(false);
-                      if (res.success && res.data) {
-                        setProvRegCity(res.data.city);
-                        setProvRegDistrict(res.data.district);
-                        setProvRegState(res.data.state);
-                        setProvRegArea(res.data.primaryArea);
-                        setProvRegAvailableAreas(res.data.areas);
-                        setProvRegLocationDetected(true);
-                        Alert.alert('Location Detected', `${res.data.city}, ${res.data.state}`);
-                      } else {
-                        Alert.alert('Postal Lookup', res.error || 'Could not detect location for this PIN code.');
-                      }
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    {provRegIsPincodeLoading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={authStyles.cleanDetectBtnText}>Detect Location</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                {/* Location Detected Summary */}
-                {provRegLocationDetected && (
-                  <View style={[authStyles.locationDetectedCard, { marginTop: 10 }]}>
-                    <View style={authStyles.detectedCheckCircle}>
-                      <Text style={authStyles.detectedCheckmark}>✓</Text>
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={authStyles.detectedTitle}>Location Detected</Text>
-                      <Text style={authStyles.detectedSubtitle}>
-                        {provRegArea ? `${provRegArea}, ` : ''}{provRegCity}, {provRegState} - {provRegPin}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setProvRegManualAddressOpen(!provRegManualAddressOpen)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={authStyles.detectedEditText}>
-                        {provRegManualAddressOpen ? 'Close Edit' : 'Edit Address'}
-                      </Text>
-                    </TouchableOpacity>
+                {/* White Container Card */}
+                <View style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 24,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  padding: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.03,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}>
+                  {/* Header Row without icon */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>Service Location & Address</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Add your business location for customer discovery and verification.</Text>
                   </View>
-                )}
 
-                {/* Multiple Areas / Post Offices Selection */}
-                {provRegAvailableAreas.length > 1 && (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
-                      Select Service Locality Area:
+                  {/* PIN Code * */}
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                      PIN Code <Text style={{ color: '#EF4444' }}>*</Text>
                     </Text>
-                    <View style={authStyles.areaPillsWrap}>
-                      {provRegAvailableAreas.map((areaName) => {
-                        const isSelected = provRegArea.toLowerCase() === areaName.toLowerCase();
-                        return (
-                          <TouchableOpacity
-                            key={areaName}
-                            style={[authStyles.areaPillItem, isSelected && authStyles.areaPillItemSelected]}
-                            onPress={() => setProvRegArea(areaName)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={[authStyles.areaPillText, isSelected && authStyles.areaPillTextSelected]}>
-                              {areaName}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          fontSize: 13.5,
+                          color: '#111111',
+                          fontWeight: '500',
+                          borderWidth: 1,
+                          borderColor: '#D1D5DB',
+                          borderRadius: 14,
+                          backgroundColor: '#FFFFFF',
+                          paddingHorizontal: 14,
+                          height: 48,
+                        }}
+                        placeholder="Enter 6-digit Indian PIN code"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        value={provRegPin}
+                        onChangeText={(pin) => {
+                          setProvRegPin(pin);
+                          const clean = pin.replace(/\D/g, '');
+                          if (clean.length === 6) {
+                            validateAndConfirmProviderPin(clean);
+                          } else {
+                            setProvRegLocationConfirmed(false);
+                            setProvRegLocationDetected(false);
+                            setProvRegLocationError(null);
+                          }
+                        }}
+                      />
+                      <TouchableOpacity
+                        style={{
+                          alignItems: 'center',
+                          backgroundColor: '#15803D',
+                          borderRadius: 14,
+                          paddingHorizontal: 16,
+                          height: 48,
+                          justifyContent: 'center',
+                        }}
+                        onPress={handleDetectProviderLocationGps}
+                        activeOpacity={0.8}
+                      >
+                        {provRegIsPincodeLoading ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Detect Location</Text>
+                        )}
+                      </TouchableOpacity>
                     </View>
                   </View>
-                )}
 
-                {/* Manual Address Fields */}
-                <View style={authStyles.manualAddressBox}>
-                  <TouchableOpacity
-                    style={authStyles.manualAddressHeader}
-                    onPress={() => setProvRegManualAddressOpen(!provRegManualAddressOpen)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={authStyles.manualAddressHeaderText}>
-                      Detailed Street / Premise Address
-                    </Text>
-                    <Text style={authStyles.manualToggleBtnText}>
-                      {provRegManualAddressOpen ? 'Hide ▲' : 'Edit Details ▼'}
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Location Identified Confirmation Box */}
+                  {(provRegLocationDetected || (provRegPin.length === 6 && provRegCity)) && (
+                    <View style={{
+                      backgroundColor: '#F0FDF4',
+                      borderWidth: 1,
+                      borderColor: '#BBF7D0',
+                      borderRadius: 16,
+                      padding: 14,
+                      marginBottom: 14,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#16A34A' }} />
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#14532D', letterSpacing: 0.5 }}>
+                            LOCATION IDENTIFIED
+                          </Text>
+                        </View>
+                        <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803D' }}>Verified Service Area</Text>
+                        </View>
+                      </View>
 
-                  {provRegManualAddressOpen && (
-                    <View style={{ marginTop: 8 }}>
-                      <Text style={authStyles.cleanFieldLabel}>Shop / Unit / Floor Number</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="e.g. Shop 4B, 1st Floor"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegHouse}
-                        onChangeText={setProvRegHouse}
-                      />
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
+                        <View style={{ width: '50%' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>PIN Code:</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{provRegPin}</Text>
+                        </View>
+                        <View style={{ width: '50%' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>City:</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{provRegCity}</Text>
+                        </View>
+                        <View style={{ width: '50%' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>State:</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{provRegState}</Text>
+                        </View>
+                        <View style={{ width: '50%' }}>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>District:</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>{provRegDistrict || provRegCity}</Text>
+                        </View>
+                      </View>
 
-                      <Text style={authStyles.cleanFieldLabel}>Building / Complex Name</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="e.g. Fortune Business Center"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegBuilding}
-                        onChangeText={setProvRegBuilding}
-                      />
-
-                      <Text style={authStyles.cleanFieldLabel}>Street / Road</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="e.g. MG Road, Commercial Zone"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegStreet}
-                        onChangeText={setProvRegStreet}
-                      />
-
-                      <Text style={authStyles.cleanFieldLabel}>Area / Locality *</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="Enter locality name"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegArea}
-                        onChangeText={setProvRegArea}
-                      />
-
-                      <Text style={authStyles.cleanFieldLabel}>Landmark</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="e.g. Opposite Metro Pillar 42"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegLandmark}
-                        onChangeText={setProvRegLandmark}
-                      />
-
-                      <Text style={authStyles.cleanFieldLabel}>City / District *</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="Enter City"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegCity}
-                        onChangeText={setProvRegCity}
-                      />
-
-                      <Text style={authStyles.cleanFieldLabel}>State *</Text>
-                      <TextInput
-                        style={authStyles.cleanTextInputBox}
-                        placeholder="Enter State"
-                        placeholderTextColor="#94A3B8"
-                        value={provRegState}
-                        onChangeText={setProvRegState}
-                      />
-                    </View>
-                  )}
-                </View>
-
-                {/* Google Maps Shared Location Link */}
-                <View style={{ marginTop: 12 }}>
-                  <Text style={authStyles.cleanFieldLabel}>Google Maps Shared Location Link *</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <TextInput
-                      style={[authStyles.cleanTextInputBox, { flex: 1, marginBottom: 0 }]}
-                      placeholder="https://maps.app.goo.gl/... or https://goo.gl/maps/..."
-                      placeholderTextColor="#94A3B8"
-                      value={provGoogleMapsLink}
-                      onChangeText={setProvGoogleMapsLink}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: provGoogleMapsLink.trim() ? '#047857' : '#94A3B8',
-                        paddingHorizontal: 14,
-                        height: 48,
-                        borderRadius: 12,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => {
-                        const url = provGoogleMapsLink.trim();
-                        if (!url) {
-                          Alert.alert('Link Required', 'Please paste your Google Maps shared link first.');
-                          return;
-                        }
-                        if (typeof window !== 'undefined' && window.open) {
-                          window.open(url, '_blank');
-                        } else {
-                          Alert.alert('Google Maps Link', `Verified location link: ${url}`);
-                        }
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Test Link</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4, marginBottom: 12, lineHeight: 15 }}>
-                    📌 Open Google Maps on phone → Find your clinic/shop/workplace → Tap Share → Copy link & paste here.
-                  </Text>
-                </View>
-
-                {/* Premise / Workplace Verification Photos */}
-                <View style={{ marginTop: 4, marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={authStyles.cleanFieldLabel}>
-                      Premise / Workplace Photos * ({provPremisePhotos.length}/3)
-                    </Text>
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#10B981' }}>
-                      HD Compressed
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 10, lineHeight: 15 }}>
-                    Upload 1 to 3 clear photos showing your shop/clinic/office front view with signage board & interior workstation.
-                  </Text>
-
-                  {/* Thumbnails of already uploaded premise photos */}
-                  {provPremisePhotos.length > 0 && (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-                      {provPremisePhotos.map((photo, pIdx) => (
-                        <View
-                          key={pIdx}
-                          style={{
-                            position: 'relative',
-                            width: 100,
-                            height: 94,
-                            borderRadius: 12,
-                            borderWidth: 1.5,
-                            borderColor: '#10B981',
-                            overflow: 'hidden',
-                            backgroundColor: '#F8FAFC',
-                          }}
-                        >
-                          <Image
-                            source={{ uri: photo.dataUrl }}
-                            style={{ width: '100%', height: 68, resizeMode: 'cover' }}
-                          />
-                          <View style={{ paddingHorizontal: 4, paddingVertical: 2, backgroundColor: '#ECFDF5' }}>
-                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#047857' }} numberOfLines={1}>
-                              HD {photo.fileSizeKb} KB
-                            </Text>
-                          </View>
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#DCFCE7', paddingTop: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534', marginBottom: 8 }}>
+                          Is this your service location?
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <TouchableOpacity
                             style={{
-                              position: 'absolute',
-                              top: 4,
-                              right: 4,
-                              backgroundColor: 'rgba(0,0,0,0.65)',
-                              borderRadius: 10,
-                              width: 20,
-                              height: 20,
+                              flex: 1,
+                              backgroundColor: '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: '#D1D5DB',
+                              borderRadius: 12,
+                              paddingVertical: 9,
                               alignItems: 'center',
-                              justifyContent: 'center',
                             }}
                             onPress={() => {
-                              setProvPremisePhotos(provPremisePhotos.filter((_, i) => i !== pIdx));
+                              setProvRegPin('');
+                              setProvRegCity('');
+                              setProvRegDistrict('');
+                              setProvRegState('');
+                              setProvRegLocationDetected(false);
+                              setProvRegLocationConfirmed(false);
+                              setProvRegLocationError(null);
                             }}
+                            activeOpacity={0.8}
                           >
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>✕</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Change PIN Code</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={{
+                              flex: 1,
+                              backgroundColor: provRegLocationConfirmed ? '#166534' : '#15803D',
+                              borderRadius: 12,
+                              paddingVertical: 9,
+                              alignItems: 'center',
+                            }}
+                            onPress={() => setProvRegLocationConfirmed(true)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                              {provRegLocationConfirmed ? '✓ Location Confirmed' : 'Confirm Location'}
+                            </Text>
                           </TouchableOpacity>
                         </View>
-                      ))}
+                      </View>
                     </View>
                   )}
 
-                  {/* Upload button if fewer than 3 photos */}
-                  {provPremisePhotos.length < 3 && (
+                  {/* Unavailable Location Error Banner */}
+                  {provRegLocationError && (
+                    <View style={{
+                      backgroundColor: '#FFF1F2',
+                      borderWidth: 1,
+                      borderColor: '#FECDD3',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 14,
+                    }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#9F1239', marginBottom: 2 }}>
+                        Registration Unavailable in this Location
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#BE123C' }}>
+                        {provRegLocationError}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Multiple Areas / Post Offices Selection */}
+                  {provRegAvailableAreas.length > 1 && (
+                    <View style={{ marginBottom: 14 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 4 }}>
+                        Select Service Locality Area:
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {provRegAvailableAreas.map((areaName) => {
+                          const isSelected = provRegArea.toLowerCase() === areaName.toLowerCase();
+                          return (
+                            <TouchableOpacity
+                              key={areaName}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 10,
+                                backgroundColor: isSelected ? '#15803D' : '#F1F5F9',
+                              }}
+                              onPress={() => setProvRegArea(areaName)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: isSelected ? '#FFFFFF' : '#475569' }}>
+                                {areaName}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Detailed Street / Premise Address */}
+                  <View style={{
+                    borderWidth: 1,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 16,
+                    backgroundColor: '#FFFFFF',
+                    padding: 12,
+                    marginBottom: 14,
+                  }}>
                     <TouchableOpacity
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        backgroundColor: '#F0FDF4',
-                        borderWidth: 1.5,
-                        borderColor: '#86EFAC',
-                        borderStyle: 'dashed',
-                        borderRadius: 14,
-                        paddingVertical: 14,
-                        paddingHorizontal: 16,
-                      }}
-                      onPress={() => {
-                        setUploadModalTarget('premise');
-                        setUploadModalVisible(true);
-                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                      onPress={() => setProvRegManualAddressOpen(!provRegManualAddressOpen)}
                       activeOpacity={0.8}
                     >
-                      <Text style={{ fontSize: 18 }}>📸</Text>
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#15803D' }}>
-                        + Add Workplace Photo (Camera / Gallery / Files)
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '600', color: '#111827' }}>
+                          Detailed Street / Premise Address
+                        </Text>
+                        {!!(provRegHouse || provRegBuilding || provRegStreet || provRegArea) && (
+                          <Text style={{ fontSize: 11.5, color: '#4B5563', marginTop: 2 }} numberOfLines={1}>
+                            {[provRegHouse, provRegBuilding, provRegStreet, provRegArea].filter(Boolean).join(', ')}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#15803D' }}>
+                        {provRegManualAddressOpen ? 'Hide Details ▲' : 'View Details >'}
                       </Text>
                     </TouchableOpacity>
-                  )}
+
+                    {provRegManualAddressOpen && (
+                      <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Shop / Unit / Floor Number</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="e.g. Shop 4B, 1st Floor"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegHouse}
+                          onChangeText={setProvRegHouse}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Building / Complex Name</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="e.g. Fortune Business Center"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegBuilding}
+                          onChangeText={setProvRegBuilding}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Street / Road</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="e.g. MG Road, Commercial Zone"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegStreet}
+                          onChangeText={setProvRegStreet}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Area / Locality *</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="Enter locality name"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegArea}
+                          onChangeText={setProvRegArea}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Landmark</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="e.g. Opposite Metro Pillar 42"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegLandmark}
+                          onChangeText={setProvRegLandmark}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>City / District *</Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { marginBottom: 10 }]}
+                          placeholder="Enter City"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegCity}
+                          onChangeText={setProvRegCity}
+                        />
+
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 }}>State *</Text>
+                        <TextInput
+                          style={authStyles.cleanTextInputBox}
+                          placeholder="Enter State"
+                          placeholderTextColor="#94A3B8"
+                          value={provRegState}
+                          onChangeText={setProvRegState}
+                        />
+
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#15803D',
+                            borderRadius: 12,
+                            paddingVertical: 10,
+                            alignItems: 'center',
+                            marginTop: 12,
+                          }}
+                          onPress={() => setProvRegManualAddressOpen(false)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Save & Hide Details ✓</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Google Maps Shared Location Link (Optional) */}
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                      Google Maps Shared Location Link <Text style={{ fontSize: 12, fontWeight: 'normal', color: '#6B7280' }}>(Optional)</Text>
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          fontSize: 13.5,
+                          color: '#111111',
+                          fontWeight: '500',
+                          borderWidth: 1,
+                          borderColor: '#D1D5DB',
+                          borderRadius: 14,
+                          backgroundColor: '#FFFFFF',
+                          paddingHorizontal: 14,
+                          height: 48,
+                        }}
+                        placeholder="Paste Google Maps link here..."
+                        placeholderTextColor="#9CA3AF"
+                        value={provGoogleMapsLink}
+                        onChangeText={setProvGoogleMapsLink}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 1.5,
+                          borderColor: '#15803D',
+                          paddingHorizontal: 16,
+                          height: 48,
+                          borderRadius: 14,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => {
+                          const url = provGoogleMapsLink.trim();
+                          if (!url) {
+                            Alert.alert('Link Required', 'Please paste your Google Maps shared link first.');
+                            return;
+                          }
+                          if (typeof window !== 'undefined' && window.open) {
+                            window.open(url, '_blank');
+                          } else {
+                            Alert.alert('Google Maps Link', `Verified location link: ${url}`);
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ color: '#15803D', fontSize: 13, fontWeight: '700' }}>Test Link</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 6, lineHeight: 15 }}>
+                      Optional: Open Google Maps → Find your clinic/shop/workplace → Tap Share → Copy link & paste here. If not provided, admin will verify your location directly.
+                    </Text>
+                  </View>
+
+                  {/* Premise / Workplace Verification Photos */}
+                  <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111' }}>
+                        Premise / Workplace Photos <Text style={{ color: '#EF4444' }}>*</Text> ({provPremisePhotos.length}/3)
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#15803D' }}>
+                        HD Compressed
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6B7280', marginBottom: 10, lineHeight: 15 }}>
+                      Upload 1 to 3 clear photos showing your shop/clinic/office front view with signage board & interior workstation.
+                    </Text>
+
+                    {/* Thumbnails of already uploaded premise photos */}
+                    {provPremisePhotos.length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                        {provPremisePhotos.map((photo, pIdx) => (
+                          <View
+                            key={pIdx}
+                            style={{
+                              position: 'relative',
+                              width: 96,
+                              height: 90,
+                              borderRadius: 14,
+                              borderWidth: 1.5,
+                              borderColor: '#15803D',
+                              overflow: 'hidden',
+                              backgroundColor: '#FFFFFF',
+                            }}
+                          >
+                            <Image
+                              source={{ uri: photo.dataUrl }}
+                              style={{ width: '100%', height: 66, resizeMode: 'cover' }}
+                            />
+                            <View style={{ paddingHorizontal: 4, paddingVertical: 2, backgroundColor: '#E8F7E4' }}>
+                              <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#15803D' }} numberOfLines={1}>
+                                HD {photo.fileSizeKb} KB
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              style={{
+                                position: 'absolute',
+                                top: 4,
+                                right: 4,
+                                backgroundColor: 'rgba(0,0,0,0.65)',
+                                borderRadius: 10,
+                                width: 20,
+                                height: 20,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              onPress={() => {
+                                setProvPremisePhotos(provPremisePhotos.filter((_, i) => i !== pIdx));
+                              }}
+                            >
+                              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Upload button if fewer than 3 photos */}
+                    {provPremisePhotos.length < 3 && (
+                      <TouchableOpacity
+                        style={{
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#F0FDF4',
+                          borderWidth: 1.5,
+                          borderColor: '#86EFAC',
+                          borderStyle: 'dashed',
+                          borderRadius: 16,
+                          paddingVertical: 18,
+                          paddingHorizontal: 16,
+                        }}
+                        onPress={() => {
+                          setUploadModalTarget('premise');
+                          setUploadModalVisible(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 13.5, fontWeight: 'bold', color: '#15803D' }}>
+                          + Add Workplace Photo
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: '#15803D', opacity: 0.85, marginTop: 2 }}>
+                          (Camera / Gallery / Files)
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {/* Continue Button */}
                 <TouchableOpacity
-                  style={[authStyles.primaryPillBtn, { marginTop: 10 }]}
+                  style={{
+                    backgroundColor: '#15803D',
+                    borderRadius: 26,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 16,
+                    flexDirection: 'row',
+                    gap: 8,
+                    shadowColor: '#15803D',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  }}
                   onPress={() => {
                     const cleanPin = (provRegPin || '').replace(/\D/g, '');
                     if (cleanPin.length !== 6) {
-                      Alert.alert('Required Field', 'Please enter a valid 6-digit PIN code.');
+                      Alert.alert('Required Field', 'Please enter a valid 6-digit Indian PIN code.');
+                      return;
+                    }
+                    if (!provRegLocationConfirmed) {
+                      Alert.alert('Location Confirmation Required', 'Please verify and confirm your service location before continuing.');
                       return;
                     }
                     if (!provRegCity.trim()) {
                       Alert.alert('Required Field', 'Please ensure city is detected or entered.');
                       return;
                     }
-                    if (!provGoogleMapsLink.trim()) {
-                      Alert.alert('Google Maps Link Required', 'Please enter your Google Maps shared location link for verification.');
-                      return;
-                    }
                     if (provPremisePhotos.length === 0) {
                       Alert.alert('Premise Photo Required', 'Please upload at least 1 clear workplace/premise photo (front view with signage).');
                       return;
                     }
+                    saveProviderDraftSilently(3);
                     setProviderStep(3);
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={authStyles.primaryPillBtnText}>Continue to Services & Hours</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' }}>
+                    Continue to Services & Hours
+                  </Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>→</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -3951,171 +4887,434 @@ function App() {
             {/* ================= STEP 3: SERVICES & HOURS ================= */}
             {providerStep === 3 && (
               <View>
-                <Text style={provStepStyles.sectionTitle}>Services & Availability</Text>
-
-                {/* Dynamic Category Selection from Supabase categories */}
-                <Text style={authStyles.cleanFieldLabel}>Service Category *</Text>
-                <View style={authStyles.areaPillsWrap}>
-                  {(dbCategories.length > 0 ? dbCategories : [
-                    { id: 'cat1', name: 'Salon & Grooming' },
-                    { id: 'cat2', name: 'Healthcare & Wellness' },
-                    { id: 'cat3', name: 'Home Repairs & AC Services' },
-                    { id: 'cat4', name: 'Auto Care & Detailing' },
-                  ]).map((c: any) => {
-                    const isSelected = provRegCategory.toLowerCase() === c.name.toLowerCase();
-                    return (
-                      <TouchableOpacity
-                        key={c.id || c.name}
-                        style={[authStyles.areaPillItem, isSelected && authStyles.areaPillItemSelected]}
-                        onPress={() => setProvRegCategory(c.name)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[authStyles.areaPillText, isSelected && authStyles.areaPillTextSelected]}>
-                          {c.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Specific Services associated under the selected Category */}
-                <Text style={authStyles.cleanFieldLabel}>
-                  Specific Services You Provide * (Select all that apply)
-                </Text>
-                {(() => {
-                  const selectedCat = dbCategories.find(
-                    (c) => c.name.toLowerCase() === provRegCategory.toLowerCase()
-                  );
-                  const catServices = selectedCat
-                    ? dbServices.filter((s) => s.category_id === selectedCat.id)
-                    : [];
-
-                  if (catServices.length > 0) {
-                    return (
-                      <View style={{ marginBottom: 10 }}>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                          {catServices.map((srv) => {
-                            const isChosen = provSelectedServiceIds.includes(srv.id);
-                            return (
-                              <TouchableOpacity
-                                key={srv.id}
-                                style={[
-                                  provStepStyles.dayPill,
-                                  isChosen && provStepStyles.dayPillActive,
-                                  { paddingHorizontal: 10, paddingVertical: 6 },
-                                ]}
-                                onPress={() => {
-                                  let nextIds: string[];
-                                  if (isChosen) {
-                                    nextIds = provSelectedServiceIds.filter((id) => id !== srv.id);
-                                  } else {
-                                    nextIds = [...provSelectedServiceIds, srv.id];
-                                  }
-                                  setProvSelectedServiceIds(nextIds);
-
-                                  const chosenNames = dbServices
-                                    .filter((s) => nextIds.includes(s.id))
-                                    .map((s) => s.name);
-                                  setProvRegServices(chosenNames.join(', '));
-                                }}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={provStepStyles.dayCheckmark}>
-                                  {isChosen ? '✓' : '+'}
-                                </Text>
-                                <Text style={provStepStyles.dayText}>
-                                  {srv.name} (₹{srv.base_price})
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>
-                          Tap to select or add additional services below:
-                        </Text>
-                      </View>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <TextInput
-                  style={authStyles.cleanTextInputBox}
-                  placeholder="e.g. Hair styling, beard detailing, facial massage"
-                  placeholderTextColor="#94A3B8"
-                  value={provRegServices}
-                  onChangeText={setProvRegServices}
-                />
-
-                <Text style={authStyles.cleanFieldLabel}>Available Working Days *</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
-                    const isSelected = provAvailableDays.includes(day);
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        style={[provStepStyles.dayPill, isSelected && provStepStyles.dayPillActive]}
-                        onPress={() => {
-                          if (isSelected) {
-                            setProvAvailableDays(provAvailableDays.filter((d) => d !== day));
-                          } else {
-                            setProvAvailableDays([...provAvailableDays, day]);
-                          }
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={provStepStyles.dayCheckmark}>{isSelected ? '✓' : '○'}</Text>
-                        <Text style={provStepStyles.dayText}>{day}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Working Hours From & To */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={authStyles.cleanFieldLabel}>Working Hours From *</Text>
-                    <TextInput
-                      style={authStyles.cleanTextInputBox}
-                      placeholder="e.g. 09:00 AM"
-                      placeholderTextColor="#94A3B8"
-                      value={provWorkingHoursFrom}
-                      onChangeText={setProvWorkingHoursFrom}
-                    />
+                {/* White Container Card */}
+                <View style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 24,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  padding: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.03,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}>
+                  {/* Header Row without icon */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>Services & Availability</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Add your services and working hours.</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={authStyles.cleanFieldLabel}>Working Hours To *</Text>
+
+                  {/* Service Category * */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 8 }}>
+                      Service Category <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+
+                    {/* 2-Column Categories Grid (from Admin Panel / Supabase DB) */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                      {(() => {
+                        const adminCategories = dbCategories && dbCategories.length > 0 ? dbCategories : [
+                          { id: 'cat1', name: 'Salon & Grooming' },
+                          { id: 'cat2', name: 'Healthcare & Wellness' },
+                          { id: 'cat3', name: 'Home Repairs & AC Services' },
+                          { id: 'cat4', name: 'Auto Care & Detailing' },
+                        ];
+
+                        return (
+                          <>
+                            {adminCategories.map((c: any) => {
+                              const isSelected = !provIsCustomCategory && provRegCategory.toLowerCase() === c.name.toLowerCase();
+                              return (
+                                <TouchableOpacity
+                                  key={c.id || c.name}
+                                  style={{
+                                    width: '48%',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 14,
+                                    borderWidth: 1.5,
+                                    borderColor: isSelected ? '#15803D' : '#E5E7EB',
+                                    backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
+                                  }}
+                                  onPress={() => {
+                                    setProvIsCustomCategory(false);
+                                    setProvRegCategory(c.name);
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 12.5,
+                                      fontWeight: isSelected ? '700' : '600',
+                                      color: isSelected ? '#15803D' : '#1F2937',
+                                      flex: 1,
+                                    }}
+                                    numberOfLines={2}
+                                  >
+                                    {c.name}
+                                  </Text>
+                                  {isSelected && (
+                                    <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
+                                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>
+                                    </View>
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+
+                            {/* + Other Category Option Button */}
+                            <TouchableOpacity
+                              style={{
+                                width: '48%',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingVertical: 12,
+                                paddingHorizontal: 12,
+                                borderRadius: 14,
+                                borderWidth: 1.5,
+                                borderColor: provIsCustomCategory ? '#15803D' : '#E5E7EB',
+                                backgroundColor: provIsCustomCategory ? '#F0FDF4' : '#F9FAFB',
+                              }}
+                              onPress={() => {
+                                setProvIsCustomCategory(true);
+                                if (provCustomCategoryName) {
+                                  setProvRegCategory(provCustomCategoryName);
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: provIsCustomCategory ? '#15803D' : '#4B5563', flex: 1 }}>
+                                + Other Category
+                              </Text>
+                              {provIsCustomCategory && (
+                                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center', marginLeft: 4 }}>
+                                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          </>
+                        );
+                      })()}
+                    </View>
+
+                    {/* Custom Category Input if '+ Other Category' is clicked */}
+                    {provIsCustomCategory && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#15803D', marginBottom: 4 }}>
+                          Enter Your Custom Category Name:
+                        </Text>
+                        <TextInput
+                          style={[authStyles.cleanTextInputBox, { borderColor: '#15803D', backgroundColor: '#F0FDF4' }]}
+                          placeholder="e.g. Photography, Solar Installation, Tailoring"
+                          placeholderTextColor="#9CA3AF"
+                          value={provCustomCategoryName}
+                          onChangeText={(txt) => {
+                            setProvCustomCategoryName(txt);
+                            setProvRegCategory(txt);
+                          }}
+                        />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Specific Services You Provide * */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                      Specific Services You Provide <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+
+                    {/* Clean text input without icon */}
                     <TextInput
-                      style={authStyles.cleanTextInputBox}
-                      placeholder="e.g. 07:00 PM"
-                      placeholderTextColor="#94A3B8"
-                      value={provWorkingHoursTo}
-                      onChangeText={setProvWorkingHoursTo}
+                      style={{
+                        fontSize: 13.5,
+                        color: '#111111',
+                        fontWeight: '500',
+                        borderWidth: 1,
+                        borderColor: '#D1D5DB',
+                        borderRadius: 14,
+                        backgroundColor: '#FFFFFF',
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        marginBottom: 10,
+                      }}
+                      placeholder="e.g. Hair styling, beard detailing, facial massage"
+                      placeholderTextColor="#9CA3AF"
+                      value={provRegServices}
+                      onChangeText={setProvRegServices}
                     />
+
+                    {/* Manual Service & Cost Entry Section (User requirement: Provider manually enters specific services and exact cost) */}
+                    <View style={{
+                      backgroundColor: '#F9FAFB',
+                      borderRadius: 14,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB',
+                    }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 6 }}>
+                        Add Service & Pricing (Manual Entry):
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                        <TextInput
+                          style={{
+                            flex: 1.5,
+                            borderWidth: 1,
+                            borderColor: '#D1D5DB',
+                            borderRadius: 10,
+                            paddingHorizontal: 10,
+                            height: 40,
+                            fontSize: 12.5,
+                            backgroundColor: '#FFFFFF',
+                            color: '#111111',
+                          }}
+                          placeholder="Service Name (e.g. Haircut)"
+                          placeholderTextColor="#9CA3AF"
+                          value={provNewServiceName}
+                          onChangeText={setProvNewServiceName}
+                        />
+                        <TextInput
+                          style={{
+                            flex: 1,
+                            borderWidth: 1,
+                            borderColor: '#D1D5DB',
+                            borderRadius: 10,
+                            paddingHorizontal: 10,
+                            height: 40,
+                            fontSize: 12.5,
+                            backgroundColor: '#FFFFFF',
+                            color: '#111111',
+                          }}
+                          placeholder="Cost ₹ (e.g. 250)"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                          value={provNewServicePrice}
+                          onChangeText={setProvNewServicePrice}
+                        />
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#15803D',
+                            paddingHorizontal: 14,
+                            height: 40,
+                            borderRadius: 10,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => {
+                            if (!provNewServiceName.trim()) {
+                              Alert.alert('Service Name', 'Please enter a service name.');
+                              return;
+                            }
+                            const updated = [
+                              ...provManualServicesList,
+                              { name: provNewServiceName.trim(), price: provNewServicePrice.trim() || '0' },
+                            ];
+                            setProvManualServicesList(updated);
+                            setProvNewServiceName('');
+                            setProvNewServicePrice('');
+
+                            // Also sync with provRegServices string
+                            const names = updated.map((i) => `${i.name} (₹${i.price})`).join(', ');
+                            setProvRegServices(names);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' }}>+ Add</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Chips list of added services with price and delete */}
+                      {provManualServicesList.length > 0 && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          {provManualServicesList.map((item, idx) => (
+                            <View
+                              key={idx}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#E8F7E4',
+                                borderWidth: 1,
+                                borderColor: '#86EFAC',
+                                borderRadius: 10,
+                                paddingVertical: 4,
+                                paddingHorizontal: 8,
+                                gap: 6,
+                              }}
+                            >
+                              <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#166534' }}>
+                                {item.name} {item.price ? `(₹${item.price})` : ''}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const updated = provManualServicesList.filter((_, i) => i !== idx);
+                                  setProvManualServicesList(updated);
+                                  const names = updated.map((i) => `${i.name} (₹${i.price})`).join(', ');
+                                  setProvRegServices(names);
+                                }}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#EF4444' }}>✕</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Available Working Days * */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 8 }}>
+                      Available Working Days <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                        const isSelected = provAvailableDays.includes(day);
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 14,
+                              borderWidth: 1.5,
+                              borderColor: isSelected ? '#15803D' : '#D1D5DB',
+                              backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
+                            }}
+                            onPress={() => {
+                              if (isSelected) {
+                                setProvAvailableDays(provAvailableDays.filter((d) => d !== day));
+                              } else {
+                                setProvAvailableDays([...provAvailableDays, day]);
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{
+                              fontSize: 12,
+                              fontWeight: 'bold',
+                              color: isSelected ? '#15803D' : '#9CA3AF',
+                            }}>
+                              {isSelected ? '✓' : '○'}
+                            </Text>
+                            <Text style={{
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? '700' : '500',
+                              color: isSelected ? '#15803D' : '#374151',
+                            }}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Working Hours From & To */}
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
+                    {/* Working Hours From */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                        Working Hours From <Text style={{ color: '#EF4444' }}>*</Text>
+                      </Text>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: '#D1D5DB',
+                        borderRadius: 14,
+                        backgroundColor: '#FFFFFF',
+                        paddingHorizontal: 12,
+                        height: 48,
+                      }}>
+                        <TextInput
+                          style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#111111' }}
+                          value={provWorkingHoursFrom}
+                          onChangeText={setProvWorkingHoursFrom}
+                          placeholder="09:00 AM"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <Text style={{ fontSize: 12, color: '#6B7280' }}>∨</Text>
+                      </View>
+                    </View>
+
+                    {/* Working Hours To */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111111', marginBottom: 6 }}>
+                        Working Hours To <Text style={{ color: '#EF4444' }}>*</Text>
+                      </Text>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: '#D1D5DB',
+                        borderRadius: 14,
+                        backgroundColor: '#FFFFFF',
+                        paddingHorizontal: 12,
+                        height: 48,
+                      }}>
+                        <TextInput
+                          style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#111111' }}
+                          value={provWorkingHoursTo}
+                          onChangeText={setProvWorkingHoursTo}
+                          placeholder="07:00 PM"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <Text style={{ fontSize: 12, color: '#6B7280' }}>∨</Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 
                 {/* Continue Button */}
                 <TouchableOpacity
-                  style={[authStyles.primaryPillBtn, { marginTop: 14 }]}
+                  style={{
+                    backgroundColor: '#15803D',
+                    borderRadius: 26,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 16,
+                    flexDirection: 'row',
+                    gap: 8,
+                    shadowColor: '#15803D',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  }}
                   onPress={() => {
                     if (!provRegCategory) {
-                      Alert.alert('Required Field', 'Please select your service category.');
+                      Alert.alert('Required Field', 'Please select or enter your service category.');
                       return;
                     }
-                    if (!provRegServices.trim()) {
-                      Alert.alert('Required Field', 'Please describe the services you provide.');
+                    if (!provRegServices.trim() && provManualServicesList.length === 0) {
+                      Alert.alert('Required Field', 'Please specify the services you provide.');
                       return;
                     }
                     if (provAvailableDays.length === 0) {
                       Alert.alert('Required Field', 'Please select at least one available working day.');
                       return;
                     }
+                    saveProviderDraftSilently(4);
                     setProviderStep(4);
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={authStyles.primaryPillBtnText}>Continue to Documents & Review</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' }}>
+                    Continue to Documents & Review
+                  </Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>→</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -4287,7 +5486,7 @@ function App() {
                   )}
                 </View>
 
-                {/* HD Clarity Guarantee Notice */}
+                {/* HD Clarity Guarantee Notice without icon */}
                 <View style={{
                   backgroundColor: '#F0FDF4',
                   borderRadius: 12,
@@ -4298,11 +5497,107 @@ function App() {
                   marginBottom: 16,
                 }}>
                   <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534', marginBottom: 2 }}>
-                    ⚡ HD Clarity Guarantee & Admin Review Notice
+                    HD Clarity Guarantee & Admin Review Notice
                   </Text>
                   <Text style={{ fontSize: 11, color: '#14532D', lineHeight: 15 }}>
                     Our smart compressor preserves 100% sharp text on IDs and documents while keeping files compact (&lt; 450 KB). If an image is blurred or dark, the Admin will return a re-upload request.
                   </Text>
+                </View>
+
+                {/* Bank & Settlement Account Details (Clean, no icons) */}
+                <View style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  padding: 16,
+                  marginBottom: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.03,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 }}>
+                    Bank & Settlement Account Details
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 14 }}>
+                    Direct settlement account for customer booking payouts.
+                  </Text>
+
+                  {/* Account Holder Name */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      Account Holder Name <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={authStyles.cleanTextInputBox}
+                      placeholder="Name as per Bank records"
+                      placeholderTextColor="#9CA3AF"
+                      value={provAccountHolderName}
+                      onChangeText={setProvAccountHolderName}
+                    />
+                  </View>
+
+                  {/* Bank Name */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      Bank Name <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={authStyles.cleanTextInputBox}
+                      placeholder="e.g. State Bank of India, HDFC Bank, ICICI"
+                      placeholderTextColor="#9CA3AF"
+                      value={provBankName}
+                      onChangeText={setProvBankName}
+                    />
+                  </View>
+
+                  {/* Account Number */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      Bank Account Number <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={authStyles.cleanTextInputBox}
+                      placeholder="Enter bank account number"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="number-pad"
+                      value={provAccountNumber}
+                      onChangeText={setProvAccountNumber}
+                    />
+                  </View>
+
+                  {/* IFSC Code */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      IFSC Code <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={authStyles.cleanTextInputBox}
+                      placeholder="e.g. SBIN0001234, HDFC0000456"
+                      placeholderTextColor="#9CA3AF"
+                      autoCapitalize="characters"
+                      maxLength={11}
+                      value={provIfscCode}
+                      onChangeText={(t) => setProvIfscCode(t.toUpperCase())}
+                    />
+                  </View>
+
+                  {/* UPI ID (Optional) */}
+                  <View>
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                      UPI ID <Text style={{ fontSize: 11, fontWeight: 'normal', color: '#6B7280' }}>(Optional)</Text>
+                    </Text>
+                    <TextInput
+                      style={authStyles.cleanTextInputBox}
+                      placeholder="e.g. username@okhdfcbank"
+                      placeholderTextColor="#9CA3AF"
+                      autoCapitalize="none"
+                      value={provUpiId}
+                      onChangeText={setProvUpiId}
+                    />
+                  </View>
                 </View>
 
                 <Text style={[provStepStyles.sectionTitle, { marginTop: 10, marginBottom: 10 }]}>
@@ -4331,7 +5626,7 @@ function App() {
                   </View>
                   <View style={provStepStyles.reviewRow}>
                     <Text style={provStepStyles.reviewLabel}>Email</Text>
-                    <Text style={provStepStyles.reviewValue}>{provRegEmail}</Text>
+                    <Text style={provStepStyles.reviewValue}>{provRegEmail || 'Not Provided'}</Text>
                   </View>
                 </View>
 
@@ -4348,9 +5643,15 @@ function App() {
                     <Text style={provStepStyles.reviewValue}>{provRegArea ? `${provRegArea}, ` : ''}{provRegCity} - {provRegPin}</Text>
                   </View>
                   <View style={provStepStyles.reviewRow}>
+                    <Text style={provStepStyles.reviewLabel}>Premise Address</Text>
+                    <Text style={provStepStyles.reviewValue}>
+                      {[provRegHouse, provRegBuilding, provRegStreet, provRegLandmark].filter(Boolean).join(', ') || 'Standard Premise Address'}
+                    </Text>
+                  </View>
+                  <View style={provStepStyles.reviewRow}>
                     <Text style={provStepStyles.reviewLabel}>Google Maps</Text>
                     <Text style={[provStepStyles.reviewValue, { color: '#047857' }]} numberOfLines={1}>
-                      {provGoogleMapsLink ? 'Shared Link Attached ✓' : 'Not Set'}
+                      {provGoogleMapsLink ? 'Shared Link Attached' : 'Not Set'}
                     </Text>
                   </View>
                   <View style={provStepStyles.reviewRow}>
@@ -4375,6 +5676,37 @@ function App() {
                     <Text style={provStepStyles.reviewLabel}>Hours</Text>
                     <Text style={provStepStyles.reviewValue}>{provWorkingHoursFrom} - {provWorkingHoursTo}</Text>
                   </View>
+                </View>
+
+                {/* Review Card 3: Bank Account Details */}
+                <View style={provStepStyles.reviewCard}>
+                  <View style={provStepStyles.reviewHeader}>
+                    <Text style={provStepStyles.reviewTitle}>Bank Account Details</Text>
+                  </View>
+                  <View style={provStepStyles.reviewRow}>
+                    <Text style={provStepStyles.reviewLabel}>Account Holder</Text>
+                    <Text style={provStepStyles.reviewValue}>{provAccountHolderName || 'Not Set'}</Text>
+                  </View>
+                  <View style={provStepStyles.reviewRow}>
+                    <Text style={provStepStyles.reviewLabel}>Bank Name</Text>
+                    <Text style={provStepStyles.reviewValue}>{provBankName || 'Not Set'}</Text>
+                  </View>
+                  <View style={provStepStyles.reviewRow}>
+                    <Text style={provStepStyles.reviewLabel}>Account Number</Text>
+                    <Text style={provStepStyles.reviewValue}>
+                      {provAccountNumber ? '•••• ' + provAccountNumber.slice(-4) : 'Not Set'}
+                    </Text>
+                  </View>
+                  <View style={provStepStyles.reviewRow}>
+                    <Text style={provStepStyles.reviewLabel}>IFSC Code</Text>
+                    <Text style={provStepStyles.reviewValue}>{provIfscCode || 'Not Set'}</Text>
+                  </View>
+                  {provUpiId ? (
+                    <View style={provStepStyles.reviewRow}>
+                      <Text style={provStepStyles.reviewLabel}>UPI ID</Text>
+                      <Text style={provStepStyles.reviewValue}>{provUpiId}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {/* Agreement Checkbox */}
@@ -4404,10 +5736,27 @@ function App() {
                       Alert.alert('PAN Card Required', 'Please upload your PAN Card (front side) in HD clarity.');
                       return;
                     }
+                    if (!provAccountHolderName.trim()) {
+                      Alert.alert('Bank Details Required', 'Please enter the bank account holder name.');
+                      return;
+                    }
+                    if (!provBankName.trim()) {
+                      Alert.alert('Bank Details Required', 'Please enter your bank name.');
+                      return;
+                    }
+                    if (!provAccountNumber.trim() || provAccountNumber.trim().length < 6) {
+                      Alert.alert('Bank Details Required', 'Please enter a valid bank account number.');
+                      return;
+                    }
+                    if (!provIfscCode.trim() || provIfscCode.trim().length < 8) {
+                      Alert.alert('Bank Details Required', 'Please enter a valid IFSC code.');
+                      return;
+                    }
                     if (!provReviewAgreed) {
                       Alert.alert('Terms & Conditions', 'Please agree to the Terms & Conditions and Privacy Policy.');
                       return;
                     }
+                    saveProviderDraftSilently(4);
                     setOtpCountdown(28);
                     setAuthOtpDigits(['', '', '', '', '', '']);
                     setAuthStep('otp_provider');
@@ -4514,7 +5863,6 @@ function App() {
                     onPress={() => uploadModalTarget && triggerDocPicker('camera', uploadModalTarget)}
                     activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 22, marginRight: 14 }}>📸</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E293B' }}>
                         Take Photo with Camera
@@ -4523,7 +5871,6 @@ function App() {
                         Capture high-clarity live photo using device camera
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 16, color: '#94A3B8' }}>→</Text>
                   </TouchableOpacity>
 
                   {/* 2. Gallery */}
@@ -4540,7 +5887,6 @@ function App() {
                     onPress={() => uploadModalTarget && triggerDocPicker('gallery', uploadModalTarget)}
                     activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 22, marginRight: 14 }}>🖼️</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E293B' }}>
                         Choose from Photo Gallery
@@ -4549,7 +5895,6 @@ function App() {
                         Pick existing clear photo from device library
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 16, color: '#94A3B8' }}>→</Text>
                   </TouchableOpacity>
 
                   {/* 3. Files / PDF */}
@@ -4566,16 +5911,14 @@ function App() {
                     onPress={() => uploadModalTarget && triggerDocPicker('file', uploadModalTarget)}
                     activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 22, marginRight: 14 }}>📁</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1E293B' }}>
                         Browse Files & Documents
                       </Text>
                       <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                        Select PDF or scanned identity file from device storage
+                        Select PDF or scanned image file from device storage
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 16, color: '#94A3B8' }}>→</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -4601,10 +5944,10 @@ function App() {
     // 7. SERVICE PROVIDER OTP VERIFICATION SCREEN
     if (authStep === 'otp_provider') {
       return (
-        <SafeAreaView style={styles.authContainer}>
-          <RNStatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <SafeAreaView style={[styles.authContainer, { backgroundColor: '#FFFFFF' }]}>
+          <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <ScrollView
-            contentContainerStyle={authStyles.scrollContainer}
+            contentContainerStyle={[authStyles.scrollContainer, { backgroundColor: '#FFFFFF' }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -4719,7 +6062,20 @@ function App() {
                   panDoc: provPanDoc,
                   expDoc: provExpDoc,
                   serviceIds: provSelectedServiceIds,
+                  accountHolderName: provAccountHolderName,
+                  bankName: provBankName,
+                  bankAccountNumber: provAccountNumber,
+                  ifscCode: provIfscCode,
+                  upiId: provUpiId,
                 });
+                try {
+                  if (typeof localStorage !== 'undefined') {
+                    localStorage.removeItem('@qa_provider_reg_draft');
+                  }
+                  if (AsyncStorage) {
+                    await AsyncStorage.removeItem('@qa_provider_reg_draft');
+                  }
+                } catch (_) {}
                 setUserName(provRegName);
                 if (provRegEmail) setUserEmail(provRegEmail);
                 setPhoneNumber(provRegMobile);
@@ -4749,10 +6105,10 @@ function App() {
     // 8. SERVICE PROVIDER PENDING APPROVAL SCREEN (Matching Reference Screenshot 5: Registration Submitted & Under Verification)
     if (authStep === 'provider_pending') {
       return (
-        <SafeAreaView style={styles.authContainer}>
-          <RNStatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <SafeAreaView style={[styles.authContainer, { backgroundColor: '#FFFFFF' }]}>
+          <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <ScrollView
-            contentContainerStyle={authStyles.scrollContainer}
+            contentContainerStyle={[authStyles.scrollContainer, { backgroundColor: '#FFFFFF' }]}
             showsVerticalScrollIndicator={false}
           >
             {/* Top Navigation Row */}
@@ -7169,7 +8525,7 @@ const illusStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#F5F2E6',
+    backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#1B5E20',
   },
@@ -9651,7 +11007,7 @@ const authStyles = StyleSheet.create({
   scrollContainer: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === 'android' ? 36 : 28,
     flexGrow: 1,
   },
   topNavRow: {
@@ -10510,7 +11866,7 @@ const authStyles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#FDFCF4',
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E8E4D9',
@@ -10602,7 +11958,7 @@ const customerHomeStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
-    backgroundColor: '#FDFCF4',
+    backgroundColor: '#FFFFFF',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -11221,7 +12577,7 @@ const customerHomeStyles = StyleSheet.create({
   },
   bottomNavBar: {
     flexDirection: 'row',
-    backgroundColor: '#FDFCF4',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E8E4D9',
     paddingBottom: Platform.OS === 'android' ? 22 : 30,
@@ -11306,7 +12662,7 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={{ flex: 1, backgroundColor: '#FDFCF4', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <Text style={{ fontSize: 40, marginBottom: 16 }}>⚡</Text>
           <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111111', marginBottom: 8, textAlign: 'center' }}>
             Quick Appointments

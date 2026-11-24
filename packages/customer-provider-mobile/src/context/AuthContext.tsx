@@ -127,7 +127,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     refreshProfile();
     const unsubscribeSync = mobileApi.subscribeToSync((type) => {
-      if (type === 'PROVIDER_APPROVED' || type === 'USER_UPDATED') {
+      if (
+        type === 'PROVIDER_APPROVED' ||
+        type === 'provider_kyc_updated' ||
+        type === 'providers_updated' ||
+        type === 'USER_UPDATED'
+      ) {
         refreshProfile();
       }
     });
@@ -144,16 +149,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     preloadedUser?: any
   ) => {
     if (preloadedUser) {
+      const actualUser = preloadedUser.user || preloadedUser;
+      const actualToken = preloadedUser.accessToken || actualUser.accessToken || preloadedUser.token;
+      if (actualToken) mobileApi.setToken(actualToken);
+
+      const provProf =
+        actualUser.providerProfile ||
+        actualUser.provider_profiles ||
+        actualUser.provider ||
+        preloadedUser.provider ||
+        preloadedUser.providerProfile;
+      const custProf =
+        actualUser.customerProfile ||
+        actualUser.customer_profiles ||
+        actualUser.customer ||
+        preloadedUser.customer ||
+        preloadedUser.customerProfile;
+
       const normalized: UserState = {
-        id: preloadedUser.id,
-        phone: preloadedUser.phone || phone,
-        fullName: preloadedUser.fullName || preloadedUser.full_name || fullName || 'Quick User',
-        roles: preloadedUser.roles || [role],
-        activeRole: (preloadedUser.activeRole || role) as 'CUSTOMER' | 'PROVIDER',
-        customerProfile: preloadedUser.customerProfile || preloadedUser.customer_profiles,
-        providerProfile: normalizeProviderProfile(
-          preloadedUser.providerProfile || preloadedUser.provider_profiles
-        ),
+        id: actualUser.id || preloadedUser.id,
+        phone: actualUser.phone || preloadedUser.phone || phone,
+        fullName: actualUser.fullName || actualUser.full_name || fullName || 'Quick User',
+        roles: Array.isArray(actualUser.roles) && actualUser.roles.length > 0
+          ? actualUser.roles
+          : Array.isArray(preloadedUser.roles) && preloadedUser.roles.length > 0
+          ? preloadedUser.roles
+          : [role],
+        activeRole: (actualUser.activeRole || preloadedUser.activeRole || role) as 'CUSTOMER' | 'PROVIDER',
+        customerProfile: custProf,
+        providerProfile: normalizeProviderProfile(provProf),
       };
       setUser(normalized);
       setActiveRole(normalized.activeRole);
@@ -185,13 +209,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await mobileApi.switchRole(targetRole).catch(() => null);
       setActiveRole(targetRole);
-      if (user) {
-        const updated: UserState = { ...user, activeRole: targetRole };
+      let currentUser = user;
+      if (!currentUser) {
+        try {
+          const cached = localStorage.getItem('qa_mobile_user');
+          if (cached) currentUser = JSON.parse(cached);
+        } catch {}
+      }
+      if (currentUser) {
+        const updated: UserState = { ...currentUser, activeRole: targetRole };
         if (!updated.roles.includes(targetRole)) {
           updated.roles.push(targetRole);
         }
         if (targetRole === 'PROVIDER') {
-          const kyc = await mobileApi.getProviderKycStatus(user.id, user.phone).catch(() => null);
+          const kyc = await mobileApi.getProviderKycStatus(currentUser.id, currentUser.phone).catch(() => null);
           if (kyc?.profile) {
             updated.providerProfile = normalizeProviderProfile(kyc.profile);
           }

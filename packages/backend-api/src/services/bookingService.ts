@@ -114,7 +114,7 @@ export class BookingService {
           } else {
             discountAmount = Math.min(servicePrice, Number(coupon.value));
           }
-          await SupabaseDb.updateOne('coupons', coupon.id, { used_count: Number(coupon.used_count || 0) + 1 }).catch(() => {});
+          await SupabaseDb.updateOne('coupons', coupon.id, { used_count: Number(coupon.used_count || 0) + 1 }).catch(() => { });
         }
       }
     }
@@ -188,7 +188,7 @@ export class BookingService {
       from_status: 'HELD',
       to_status: initialStatus,
       reason: 'Customer confirmed appointment reservation',
-    }).catch(() => {});
+    }).catch(() => { });
 
     await SupabaseDb.insertOne('provider_earnings', {
       provider_id: provider.id,
@@ -197,7 +197,7 @@ export class BookingService {
       platform_fee: platformCommission,
       net_earnings: providerEarnings,
       is_settled: false,
-    }).catch(() => {});
+    }).catch(() => { });
 
     await SupabaseDb.insert('notifications', [
       {
@@ -214,7 +214,7 @@ export class BookingService {
         message: `New appointment ${bookingRef} for ${service.name} on ${reservation.date} at ${reservation.start_time}.`,
         data: { bookingId: bookingRow.id, bookingRef },
       },
-    ]).catch(() => {});
+    ]).catch(() => { });
 
     SupabaseDb.broadcastSync('bookings_updated', {
       bookingId: bookingRow.id,
@@ -273,15 +273,45 @@ export class BookingService {
     try {
       updated = await SupabaseDb.updateOne<any>('bookings', bookingId, patch);
     } catch (err: any) {
-      // Fallback if Migration 08 hasn't added DECLINED/NO_SHOW to status CHECK constraint yet
-      if (newStatus === 'DECLINED' && String(err.message).includes('bookings_status_check')) {
-        updated = await SupabaseDb.updateOne<any>('bookings', bookingId, {
-          ...patch,
-          status: 'CANCELLED',
-          cancellation_reason: reason || 'Declined by provider',
-        });
+      const isConstraintErr = String(err.message || '').includes('bookings_status_check');
+      if (isConstraintErr) {
+        if (newStatus === 'NO_SHOW') {
+          updated = await SupabaseDb.updateOne<any>('bookings', bookingId, {
+            ...patch,
+            status: 'CANCELLED',
+            cancellation_reason: reason || 'Customer No Show',
+          });
+        } else if (newStatus === 'CHECKED_IN') {
+          updated = await SupabaseDb.updateOne<any>('bookings', bookingId, {
+            ...patch,
+            status: 'IN_PROGRESS',
+            cancellation_reason: reason || 'Customer Checked In',
+          });
+        } else if (newStatus === 'DECLINED') {
+          updated = await SupabaseDb.updateOne<any>('bookings', bookingId, {
+            ...patch,
+            status: 'CANCELLED',
+            cancellation_reason: reason || 'Declined by provider',
+          });
+        } else {
+          throw err;
+        }
       } else {
         throw err;
+      }
+    }
+
+    // Process refund record if booking was cancelled and paid
+    if (newStatus === 'CANCELLED' || updated?.status === 'CANCELLED') {
+      if (existing.payment_status === 'PAID') {
+        await SupabaseDb.updateOne<any>('bookings', bookingId, { payment_status: 'REFUNDED' }).catch(() => { });
+        await SupabaseDb.insertOne('refunds', {
+          booking_id: bookingId,
+          amount: Number(existing.total_amount || 0),
+          reason: reason || (newStatus === 'NO_SHOW' ? 'Customer No Show refund' : 'Booking cancellation refund'),
+          status: 'PROCESSING',
+          sla_deadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+        }).catch(() => { });
       }
     }
 
@@ -291,7 +321,7 @@ export class BookingService {
       to_status: updated?.status || newStatus,
       reason: reason || null,
       changed_by: changedBy || null,
-    }).catch(() => {});
+    }).catch(() => { });
 
     SupabaseDb.broadcastSync('bookings_updated', {
       bookingId,

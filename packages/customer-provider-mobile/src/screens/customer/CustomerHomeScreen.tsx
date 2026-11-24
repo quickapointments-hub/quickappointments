@@ -106,7 +106,7 @@ export const CustomerHomeScreen: React.FC<{
     };
 
     return (
-      <div className="pb-28 space-y-4 bg-[#FDFCF4] text-[#111111] font-sans">
+      <div className="pb-28 space-y-4 bg-[#FFFFFF] text-[#111111] font-sans">
         {/* Top Header matching Screenshot 1 */}
         <div className="px-4 pt-3 flex items-center justify-between">
           {/* Logo */}

@@ -192,8 +192,8 @@ const MobileNavigationContent: React.FC = () => {
   // Unauthenticated: Complete Onboarding & Authentication Flow (Matching exact screenshots)
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F5F2E6] flex items-center justify-center p-0 sm:p-4">
-        <div className="w-full max-w-md h-screen sm:h-[844px] bg-[#FDFCF4] sm:rounded-[48px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-[#E8E4D9]">
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center p-0 sm:p-4">
+        <div className="w-full max-w-md h-screen sm:h-[844px] bg-[#FFFFFF] sm:rounded-[48px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-[#E8E4D9]">
           {onboardingStage === 'carousel' && (
             <OnboardingScreen
               onComplete={() => setOnboardingStage('location')}
@@ -228,7 +228,7 @@ const MobileNavigationContent: React.FC = () => {
   const isProviderApproved = providerStatus === 'APPROVED';
 
   return (
-    <div className="min-h-screen bg-[#F5F2E6] flex flex-col items-center justify-center p-0 sm:p-4 selection:bg-[#65B32E] selection:text-white">
+    <div className="min-h-screen bg-[#FFFFFF] flex flex-col items-center justify-center p-0 sm:p-4 selection:bg-[#65B32E] selection:text-white">
       {/* Top Device & Role Controls for Reviewer Experience */}
       <div className="hidden sm:flex items-center gap-3 mb-3 text-xs text-[#111111]">
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E8E4D9] shadow-sm">
@@ -252,7 +252,7 @@ const MobileNavigationContent: React.FC = () => {
         {/* Multilingual Switcher Pill */}
         <button
           onClick={() => setShowLangModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF8F0] border border-[#E8E4D9] text-[#111111] font-semibold transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#FFFFFF] border border-[#E8E4D9] text-[#111111] font-semibold transition-all shadow-sm cursor-pointer"
         >
           <Globe className="w-3.5 h-3.5 text-[#65B32E]" />
           <span>{activeLangObj.nativeName}</span>
@@ -261,7 +261,7 @@ const MobileNavigationContent: React.FC = () => {
 
         <button
           onClick={() => setIsPhoneFrame(!isPhoneFrame)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF8F0] border border-[#E8E4D9] text-[#4B5563] font-medium transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#FFFFFF] border border-[#E8E4D9] text-[#4B5563] font-medium transition-all shadow-sm cursor-pointer"
         >
           {isPhoneFrame ? <Maximize2 className="w-3.5 h-3.5" /> : <Smartphone className="w-3.5 h-3.5" />}
           <span>{isPhoneFrame ? 'Full Width' : 'Device Shell'}</span>
@@ -270,13 +270,13 @@ const MobileNavigationContent: React.FC = () => {
 
       {/* Mobile Frame Container (Official Cream Background) */}
       <div
-        className={`w-full bg-[#FDFCF4] overflow-hidden relative transition-all duration-300 flex flex-col ${isPhoneFrame
+        className={`w-full bg-[#FFFFFF] overflow-hidden relative transition-all duration-300 flex flex-col ${isPhoneFrame
           ? 'sm:max-w-[400px] h-screen sm:h-[844px] sm:rounded-[48px] sm:border-[8px] sm:border-[#E8E4D9] shadow-2xl'
           : 'max-w-2xl min-h-screen sm:rounded-3xl shadow-xl'
           }`}
       >
         {/* Device Notch & Status bar */}
-        <div className="h-11 px-6 pt-2 flex items-center justify-between text-xs font-semibold text-[#111111] select-none bg-[#FDFCF4] shrink-0 border-b border-[#F2EFE8]">
+        <div className="h-11 px-6 pt-2 flex items-center justify-between text-xs font-semibold text-[#111111] select-none bg-[#FFFFFF] shrink-0 border-b border-[#F2EFE8]">
           <span className="font-mono text-[11px] font-bold tracking-tight">9:41</span>
 
           {/* Dynamic Island Pill with Camera & Sensor Elements */}
@@ -304,7 +304,7 @@ const MobileNavigationContent: React.FC = () => {
         </div>
 
         {/* Scrollable Screen Content */}
-        <main className="flex-1 overflow-y-auto bg-[#FDFCF4]">
+        <main className="flex-1 overflow-y-auto bg-[#FFFFFF]">
           {activeRole === 'CUSTOMER' ? (
             <>
               {selectedCategory ? (
@@ -536,7 +536,7 @@ const MobileNavigationContent: React.FC = () => {
 
         {/* Mobile Bottom Navigation Bar (Official Cream, FontAwesome Icons & Safe Area Resilient) */}
         <nav
-          className="border-t border-[#E8E4D9] bg-[#FDFCF4] px-4 flex items-center justify-around shrink-0 select-none shadow-[0_-2px_12px_rgba(0,0,0,0.03)]"
+          className="border-t border-[#E8E4D9] bg-[#FFFFFF] px-4 flex items-center justify-around shrink-0 select-none shadow-[0_-2px_12px_rgba(0,0,0,0.03)]"
           style={{
             paddingTop: '8px',
             paddingBottom: 'max(14px, env(safe-area-inset-bottom, 16px))',
@@ -757,7 +757,7 @@ class MobileErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySta
   override render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#FDFCF4] flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="min-h-screen bg-[#FFFFFF] flex flex-col items-center justify-center p-6 text-center font-sans">
           <div className="w-16 h-16 rounded-full bg-[#EFF8E7] border border-[#65B32E]/30 text-[#65B32E] flex items-center justify-center mb-4 text-2xl font-bold">
             ⚡
           </div>

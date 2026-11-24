@@ -96,12 +96,40 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
   };
 
   const isPincodeSearch = /^\d{5,6}$/.test(searchQuery.trim());
+  const [asyncMatchedCity, setAsyncMatchedCity] = useState<any | null>(null);
+
   const matchedPincodeCity = isPincodeSearch
     ? serviceCities.find((c) => {
         const list = c.pincodeList || (c.pincodes ? c.pincodes.split(',').map((p: string) => p.trim()) : []);
         return list.includes(searchQuery.trim());
-      })
+      }) || asyncMatchedCity
     : null;
+
+  useEffect(() => {
+    const cleanPin = searchQuery.trim();
+    if (cleanPin.length === 6 && /^\d{6}$/.test(cleanPin)) {
+      mobileApi.validatePincode(cleanPin).then((res) => {
+        if (res.serviceable && res.location) {
+          const loc = res.location;
+          setAsyncMatchedCity({
+            id: loc.id || `loc-${loc.pincode}`,
+            name: loc.city,
+            state: loc.state,
+            pincodes: loc.pincode,
+            pincodeList: [loc.pincode],
+          });
+          setSelectedCity(loc.city);
+          try {
+            localStorage.setItem('qa_selected_city', loc.city);
+          } catch (e) {}
+        } else {
+          setAsyncMatchedCity(null);
+        }
+      });
+    } else {
+      setAsyncMatchedCity(null);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     if (matchedPincodeCity) {
@@ -125,7 +153,7 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
   });
 
   return (
-    <div className="relative min-h-full h-full flex flex-col justify-between p-6 bg-[#FDFCF4] text-[#111111] overflow-y-auto select-none">
+    <div className="relative min-h-full h-full flex flex-col justify-between p-6 bg-[#FFFFFF] text-[#111111] overflow-y-auto select-none">
       {/* Top Header: Back Arrow */}
       <div className="pt-2 flex items-center justify-between relative z-10">
         {onBack ? (
@@ -248,22 +276,6 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
           )}
         </div>
 
-        {/* Use my current location card */}
-        <button
-          onClick={handleUseCurrentLocation}
-          type="button"
-          className="w-full mb-5 p-3.5 rounded-2xl bg-[#EFF8E7] hover:bg-[#E4F4DA] border border-[#16A34A]/30 flex items-center justify-between text-left transition-all cursor-pointer shadow-xs active:scale-[0.99]"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-[#16A34A]/10 flex items-center justify-center text-[#16A34A]">
-              <Crosshair className="w-4 h-4 text-[#16A34A]" />
-            </div>
-            <span className="text-xs sm:text-sm font-bold text-[#16A34A]">
-              {detectingLocation ? 'Detecting current location...' : 'Use my current location'}
-            </span>
-          </div>
-          <span className="text-[#16A34A] font-bold text-base">›</span>
-        </button>
 
         {/* Popular Cities section */}
         <div className="mb-4">
@@ -289,7 +301,7 @@ export const SelectLocationScreen: React.FC<SelectLocationScreenProps> = ({
                   className={`p-3.5 rounded-2xl flex items-center justify-between border transition-all cursor-pointer text-left ${
                     isSelected
                       ? 'border-[#16A34A] border-2 bg-white shadow-xs'
-                      : 'border-[#E5E7EB] bg-white hover:bg-[#FAF8F0]'
+                      : 'border-[#E5E7EB] bg-white hover:bg-[#FFFFFF]'
                   }`}
                 >
                   <div className="min-w-0 flex-1">

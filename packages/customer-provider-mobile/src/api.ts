@@ -11,14 +11,14 @@ class MobileApiClient {
   constructor() {
     try {
       this.token = localStorage.getItem('qa_mobile_token');
-    } catch {}
+    } catch { }
   }
 
   setToken(token: string) {
     this.token = token;
     try {
       localStorage.setItem('qa_mobile_token', token);
-    } catch {}
+    } catch { }
   }
 
   logout() {
@@ -26,7 +26,7 @@ class MobileApiClient {
     try {
       localStorage.removeItem('qa_mobile_token');
       localStorage.removeItem('qa_mobile_user');
-    } catch {}
+    } catch { }
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
@@ -64,7 +64,7 @@ class MobileApiClient {
         const bc = new BroadcastChannel('quick_appointments_sync');
         bc.postMessage({ type: event, payload, timestamp: Date.now() });
         setTimeout(() => bc.close(), 300);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -76,7 +76,7 @@ class MobileApiClient {
         bc.onmessage = (msgEvent) => {
           if (msgEvent?.data?.type) callback(msgEvent.data.type, msgEvent.data.payload);
         };
-      } catch {}
+      } catch { }
     }
 
     const sbChannel = supabase
@@ -89,6 +89,166 @@ class MobileApiClient {
     return () => {
       if (bc) bc.close();
       supabase.removeChannel(sbChannel);
+    };
+  }
+
+  // =========================================================================
+  // LOCATION & PIN CODE VALIDATION (Admin-Controlled Single Source of Truth)
+  // =========================================================================
+  async validatePincode(pincode: string): Promise<{
+    success: boolean;
+    serviceable: boolean;
+    message: string;
+    location: {
+      id?: string;
+      country: string;
+      state: string;
+      city: string;
+      district: string;
+      pincode: string;
+      is_active: boolean;
+    } | null;
+  }> {
+    const cleanPin = String(pincode || '').replace(/\D/g, '').trim();
+    if (!cleanPin || cleanPin.length !== 6) {
+      return {
+        success: false,
+        serviceable: false,
+        message: 'Please enter a valid 6-digit Indian PIN code.',
+        location: null,
+      };
+    }
+
+    // 1. Try backend candidate URLs (Vite proxy, explicit port 4000, Android emulator 10.0.2.2)
+    const candidateUrls = Array.from(
+      new Set(
+        [
+          API_BASE ? `${API_BASE}/locations/validate-pincode?pincode=${cleanPin}` : '',
+          `/api/locations/validate-pincode?pincode=${cleanPin}`,
+          `http://localhost:4000/api/locations/validate-pincode?pincode=${cleanPin}`,
+          `http://127.0.0.1:4000/api/locations/validate-pincode?pincode=${cleanPin}`,
+          `http://10.0.2.2:4000/api/locations/validate-pincode?pincode=${cleanPin}`,
+        ].filter(Boolean)
+      )
+    );
+
+    for (const url of candidateUrls) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const json = await res.json();
+          // Cache verified location locally for offline / fast access
+          if (json?.location && typeof localStorage !== 'undefined') {
+            try {
+              const cached = JSON.parse(localStorage.getItem('@qa_admin_locations_cache') || '[]');
+              const updated = [json.location, ...cached.filter((c: any) => c.pincode !== cleanPin)].slice(0, 100);
+              localStorage.setItem('@qa_admin_locations_cache', JSON.stringify(updated));
+            } catch { }
+          }
+          return {
+            success: true,
+            serviceable: Boolean(json.serviceable),
+            message: json.message || (json.serviceable ? 'Serviceable location verified' : 'Location unavailable'),
+            location: json.location || null,
+          };
+        }
+      } catch { }
+    }
+
+    // 2. Direct Supabase query to authoritative location_master table
+    try {
+      const { data: locData, error: locErr } = await supabase
+        .from('location_master')
+        .select('*')
+        .eq('pincode', cleanPin)
+        .maybeSingle();
+
+      if (!locErr && locData) {
+        const isActive = locData.is_active !== false;
+        return {
+          success: true,
+          serviceable: isActive,
+          message: isActive
+            ? `Location verified: ${locData.city}, ${locData.district || locData.city}, ${locData.state}`
+            : `Registration unavailable. Service in ${locData.city}, ${locData.state} (${cleanPin}) is currently inactive.`,
+          location: {
+            id: locData.id,
+            country: locData.country || 'India',
+            state: locData.state,
+            city: locData.city,
+            district: locData.district || locData.city,
+            pincode: cleanPin,
+            is_active: isActive,
+          },
+        };
+      }
+    } catch { }
+
+    // 3. Direct Supabase query to cities table (with comma-separated pincodes)
+    try {
+      const { data: citiesData, error: cityErr } = await supabase
+        .from('cities')
+        .select('*');
+
+      if (!cityErr && Array.isArray(citiesData)) {
+        for (const city of citiesData) {
+          const rawPins = String(city.pincodes || '');
+          const pinList = rawPins.split(',').map((p) => p.trim().replace(/\D/g, '')).filter(Boolean);
+          if (pinList.includes(cleanPin) || cleanPin === rawPins.trim()) {
+            const isActive = city.is_active !== false;
+            return {
+              success: true,
+              serviceable: isActive,
+              message: isActive
+                ? `Location verified: ${city.name}, ${city.state}`
+                : `Registration unavailable. Service in ${city.name}, ${city.state} (${cleanPin}) is currently inactive.`,
+              location: {
+                id: city.id,
+                country: 'India',
+                state: city.state || 'Telangana',
+                city: city.name,
+                district: city.district || city.name,
+                pincode: cleanPin,
+                is_active: isActive,
+              },
+            };
+          }
+        }
+      }
+    } catch { }
+
+    // 4. Check local storage cache for newly added admin locations
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const cached = JSON.parse(localStorage.getItem('@qa_admin_locations_cache') || '[]');
+        const found = cached.find((c: any) => c.pincode === cleanPin);
+        if (found) {
+          const isActive = found.is_active !== false;
+          return {
+            success: true,
+            serviceable: isActive,
+            message: isActive
+              ? `Location verified: ${found.city}, ${found.district || found.city}, ${found.state}`
+              : `Registration unavailable. Service in ${found.city}, ${found.state} (${cleanPin}) is currently inactive.`,
+            location: found,
+          };
+        }
+      } catch { }
+    }
+
+    // Scenario: PIN code not configured by Admin
+    return {
+      success: true,
+      serviceable: false,
+      message: `Registration unavailable. PIN code ${cleanPin} is not currently configured as a serviceable area by Admin.`,
+      location: null,
     };
   }
 
@@ -130,11 +290,11 @@ class MobileApiClient {
         fullName: data.fullName.trim(),
         phone: last10,
         email: data.email?.trim() || undefined,
-        city: data.city || 'Hyderabad',
-        state: data.state,
-        area: data.area,
-        pincode: data.pincode,
-        address: fullAddress || `${data.city || 'Hyderabad'}, India`,
+        city: data.city || '',
+        state: data.state || '',
+        area: data.area || '',
+        pincode: data.pincode || '',
+        address: fullAddress || (data.city ? `${data.city}, India` : 'India'),
       }),
     });
 
@@ -142,7 +302,7 @@ class MobileApiClient {
     if (res?.user) {
       try {
         localStorage.setItem('qa_mobile_user', JSON.stringify(res.user));
-      } catch {}
+      } catch { }
     }
     this.broadcastSync('customers_updated', { userId: res?.user?.id });
     return res;
@@ -186,7 +346,7 @@ class MobileApiClient {
     if (res?.user) {
       try {
         localStorage.setItem('qa_mobile_user', JSON.stringify(res.user));
-      } catch {}
+      } catch { }
     }
     this.broadcastSync('providers_updated', { userId: res?.user?.id });
     return res;
@@ -237,7 +397,7 @@ class MobileApiClient {
     if (res?.user) {
       try {
         localStorage.setItem('qa_mobile_user', JSON.stringify(res.user));
-      } catch {}
+      } catch { }
     }
     return res;
   }
@@ -268,23 +428,67 @@ class MobileApiClient {
   // CATALOG, BANNERS & CITIES
   // =========================================================================
   async getActiveCities() {
+    let cities: any[] = [];
     try {
-      return await this.request('/catalog/cities');
-    } catch {
-      const { data } = await supabase
-        .from('cities')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-      return { success: true, data: data || [] };
-    }
-  }
+      const res = await this.request('/catalog/cities');
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        cities = res.data;
+      }
+    } catch { }
 
-  async validatePincode(pincode: string) {
-    return this.request('/locations/validate-pincode', {
-      method: 'POST',
-      body: JSON.stringify({ pincode }),
-    });
+    if (cities.length === 0) {
+      try {
+        const { data } = await supabase
+          .from('cities')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (data && data.length > 0) cities = data;
+      } catch { }
+    }
+
+    // Merge locations from location_master table
+    try {
+      const { data: locs } = await supabase
+        .from('location_master')
+        .select('*')
+        .eq('is_active', true);
+
+      if (Array.isArray(locs) && locs.length > 0) {
+        const cityMap = new Map<string, any>();
+        for (const c of cities) {
+          cityMap.set(c.name.toLowerCase(), {
+            ...c,
+            pincodeList: c.pincodeList || (c.pincodes ? c.pincodes.split(',').map((p: string) => p.trim()) : []),
+          });
+        }
+        for (const loc of locs) {
+          const k = loc.city?.toLowerCase();
+          if (!k) continue;
+          if (cityMap.has(k)) {
+            const entry = cityMap.get(k);
+            if (!entry.pincodeList.includes(loc.pincode)) {
+              entry.pincodeList.push(loc.pincode);
+              entry.pincodes = entry.pincodeList.join(', ');
+            }
+          } else {
+            cityMap.set(k, {
+              id: loc.id,
+              name: loc.city,
+              state: loc.state,
+              district: loc.district,
+              country: loc.country || 'India',
+              is_active: true,
+              pincodes: loc.pincode,
+              pincodeList: [loc.pincode],
+            });
+          }
+        }
+        cities = Array.from(cityMap.values());
+      }
+    } catch { }
+
+    return { success: true, data: cities };
   }
 
   async getCategories() {
@@ -455,6 +659,20 @@ class MobileApiClient {
     return this.request(`/bookings/${bookingId}/review`, {
       method: 'POST',
       body: JSON.stringify({ rating, tags, comment }),
+    });
+  }
+
+  // =========================================================================
+  // CUSTOMER <-> PROVIDER IN-BOOKING LIVE CHAT
+  // =========================================================================
+  async getBookingMessages(bookingId: string) {
+    return this.request(`/bookings/${bookingId}/messages`);
+  }
+
+  async sendBookingMessage(bookingId: string, message: string) {
+    return this.request(`/bookings/${bookingId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
     });
   }
 

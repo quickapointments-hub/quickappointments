@@ -413,10 +413,18 @@ class ApiClient {
   }
 
   async updateBookingStatus(bookingId: string, status: string, reason?: string) {
-    const res = await this.request(`/bookings/${bookingId}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, reason }),
-    });
+    let res: any;
+    try {
+      res = await this.request(`/admin/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      });
+    } catch {
+      res = await this.request(`/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      });
+    }
     this.broadcastSync('bookings_updated', { bookingId });
     return res;
   }
@@ -483,6 +491,262 @@ class ApiClient {
     const res = await this.request(`/admin/cities/${cityId}`, { method: 'DELETE' });
     this.broadcastSync('cities_updated', {});
     return res;
+  }
+
+  // =========================================================================
+  // ADMIN LOCATION MASTER & SERVICEABLE PIN CODES
+  // =========================================================================
+  async getLocations(filters?: { search?: string; status?: string; state?: string; city?: string }) {
+    const qs = new URLSearchParams();
+    if (filters?.search) qs.set('search', filters.search);
+    if (filters?.status && filters.status !== 'All') qs.set('status', filters.status);
+    if (filters?.state) qs.set('state', filters.state);
+    if (filters?.city) qs.set('city', filters.city);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+
+    try {
+      const res = await this.request(`/admin/locations${suffix}`);
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem('@qa_admin_locations_cache', JSON.stringify(res.data));
+          } catch {}
+        }
+        return res;
+      }
+    } catch {}
+
+    // Fallback: Query Supabase location_master & cities
+    let mergedList: any[] = [];
+    try {
+      const { data: locData } = await supabase
+        .from('location_master')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (Array.isArray(locData)) mergedList = [...locData];
+    } catch {}
+
+    // Merge from cities table
+    try {
+      const { data: citiesData } = await supabase.from('cities').select('*');
+      if (Array.isArray(citiesData)) {
+        for (const c of citiesData) {
+          const rawPins = String(c.pincodes || '');
+          const pinList = rawPins.split(',').map((p) => p.trim().replace(/\D/g, '')).filter(Boolean);
+          for (const p of pinList) {
+            if (p.length === 6 && !mergedList.some((m) => m.pincode === p)) {
+              mergedList.push({
+                id: `city-${c.id}-${p}`,
+                country: 'India',
+                state: c.state || 'Telangana',
+                city: c.name,
+                district: c.district || c.name,
+                pincode: p,
+                is_active: c.is_active !== false,
+                created_at: c.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+        }
+      }
+    } catch {}
+
+    // Merge from localStorage cache
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const cached = JSON.parse(localStorage.getItem('@qa_admin_locations_cache') || '[]');
+        if (Array.isArray(cached)) {
+          for (const c of cached) {
+            if (!mergedList.some((m) => m.pincode === c.pincode)) {
+              mergedList.push(c);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // Apply filtering
+    let filtered = mergedList;
+    if (filters?.status && filters.status !== 'All') {
+      const activeOnly = filters.status === 'Active';
+      filtered = filtered.filter((l) => (l.is_active !== false) === activeOnly);
+    }
+    if (filters?.state) {
+      filtered = filtered.filter((l) => l.state?.toLowerCase() === filters.state?.toLowerCase());
+    }
+    if (filters?.city) {
+      filtered = filtered.filter((l) => l.city?.toLowerCase() === filters.city?.toLowerCase());
+    }
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter(
+        (l) =>
+          l.pincode?.includes(q) ||
+          l.city?.toLowerCase().includes(q) ||
+          l.state?.toLowerCase().includes(q) ||
+          l.district?.toLowerCase().includes(q)
+      );
+    }
+
+    return { success: true, data: filtered };
+  }
+
+  async addLocation(data: { country?: string; state: string; city: string; district: string; pincode: string; is_active?: boolean }) {
+    const cleanPin = String(data.pincode || '').replace(/\D/g, '').trim();
+    const locItem = {
+      id: `loc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      country: data.country || 'India',
+      state: data.state.trim(),
+      city: data.city.trim(),
+      district: data.district.trim(),
+      pincode: cleanPin,
+      is_active: data.is_active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Update localStorage cache immediately
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const cached = JSON.parse(localStorage.getItem('@qa_admin_locations_cache') || '[]');
+        const updated = [locItem, ...cached.filter((c: any) => c.pincode !== cleanPin)];
+        localStorage.setItem('@qa_admin_locations_cache', JSON.stringify(updated));
+      } catch {}
+    }
+
+    let backendResult: any = null;
+    try {
+      backendResult = await this.request('/admin/locations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    } catch (e) {
+      console.warn('Backend API addLocation failed, syncing directly to Supabase:', e);
+    }
+
+    // Direct sync to Supabase location_master
+    try {
+      await supabase.from('location_master').upsert({
+        country: locItem.country,
+        state: locItem.state,
+        city: locItem.city,
+        district: locItem.district,
+        pincode: cleanPin,
+        is_active: locItem.is_active,
+      }, { onConflict: 'pincode' });
+    } catch {}
+
+    // Direct sync to Supabase cities table (append to city's pincodes)
+    try {
+      const { data: cityRows } = await supabase
+        .from('cities')
+        .select('*')
+        .ilike('name', locItem.city);
+
+      if (cityRows && cityRows.length > 0) {
+        const c = cityRows[0];
+        const existingPins = String(c.pincodes || '')
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean);
+        if (!existingPins.includes(cleanPin)) {
+          existingPins.push(cleanPin);
+          await supabase
+            .from('cities')
+            .update({ pincodes: existingPins.join(', ') })
+            .eq('id', c.id);
+        }
+      }
+    } catch {}
+
+    this.broadcastSync('locations_updated', { pincode: cleanPin });
+    this.broadcastSync('cities_updated', {});
+    return backendResult || { success: true, data: locItem };
+  }
+
+  async bulkUploadLocations(rows: Array<{ country?: string; state?: string; city?: string; district?: string; pincode?: string | number; is_active?: boolean | string }>) {
+    let backendResult: any = null;
+    try {
+      backendResult = await this.request('/admin/locations/bulk-upload', {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      });
+    } catch {}
+
+    // Direct batch upsert to Supabase
+    try {
+      const payload = rows
+        .map((r) => {
+          const pin = String(r.pincode || '').replace(/\D/g, '').trim();
+          if (pin.length !== 6) return null;
+          return {
+            country: String(r.country || 'India').trim(),
+            state: String(r.state || '').trim(),
+            city: String(r.city || '').trim(),
+            district: String(r.district || r.city || '').trim(),
+            pincode: pin,
+            is_active: r.is_active === false || r.is_active === 'false' || r.is_active === '0' ? false : true,
+          };
+        })
+        .filter(Boolean);
+
+      if (payload.length > 0) {
+        await supabase.from('location_master').upsert(payload as any[], { onConflict: 'pincode' });
+      }
+    } catch {}
+
+    this.broadcastSync('locations_updated', {});
+    this.broadcastSync('cities_updated', {});
+    return backendResult || { success: true, total: rows.length };
+  }
+
+  async updateLocation(id: string, updates: any) {
+    let backendResult: any = null;
+    try {
+      backendResult = await this.request(`/admin/locations/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+    } catch {}
+
+    try {
+      await supabase.from('location_master').update(updates).eq('id', id);
+    } catch {}
+
+    this.broadcastSync('locations_updated', {});
+    return backendResult || { success: true, data: updates };
+  }
+
+  async toggleLocationStatus(id: string, is_active: boolean) {
+    let backendResult: any = null;
+    try {
+      backendResult = await this.request(`/admin/locations/${id}/toggle`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active }),
+      });
+    } catch {}
+
+    try {
+      await supabase.from('location_master').update({ is_active }).eq('id', id);
+    } catch {}
+
+    this.broadcastSync('locations_updated', {});
+    return backendResult || { success: true, data: { id, is_active } };
+  }
+
+  async deleteLocation(id: string) {
+    let backendResult: any = null;
+    try {
+      backendResult = await this.request(`/admin/locations/${id}`, { method: 'DELETE' });
+    } catch {}
+
+    try {
+      await supabase.from('location_master').delete().eq('id', id);
+    } catch {}
+
+    this.broadcastSync('locations_updated', {});
+    return backendResult || { success: true };
   }
 
   // =========================================================================

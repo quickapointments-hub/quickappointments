@@ -2,8 +2,8 @@
  * QUICK APPOINTMENTS – OFFICIAL BRAND THEME SYSTEM
  * 
  * Derived directly from the official Quick Appointments logo:
- * - Dominant Primary Background: Warm Cream (#FDFCF4)
- * - Secondary Background: Soft Light Cream (#F5F2E6)
+ * - Dominant Primary Background: Warm Cream (#FFFFFF)
+ * - Secondary Background: Soft Light Cream (#FFFFFF)
  * - Surfaces / Cards: Clean Elevated White (#FFFFFF) with Cream Borders (#E8E4D9)
  * - Primary Typography: Jet Black (#111111)
  * - Secondary Typography: Professional Dark Grey (#4B5563)
@@ -14,10 +14,10 @@
 
 export const THEME_COLORS = {
   // Application Backgrounds
-  primaryBg: '#FDFCF4',       // Cream dominant background
-  secondaryBg: '#F5F2E6',     // Light cream secondary sections
+  primaryBg: '#FFFFFF',       // Clean white dominant background
+  secondaryBg: '#FFFFFF',     // Clean white secondary sections
   surface: '#FFFFFF',         // Cards and interactive surfaces
-  surfaceSubtle: '#FAF8F0',   // Subtle card highlight
+  surfaceSubtle: '#F9FAFB',   // Subtle neutral card highlight
   
   // Typography
   textPrimary: '#111111',     // Black headings and primary body text
@@ -32,14 +32,14 @@ export const THEME_COLORS = {
   primaryDim: '#EFF8E7',      // Soft cream-green pill / selected badge
   
   // Borders & Dividers
-  border: '#E8E4D9',          // Soft cream / light grey border
-  borderLight: '#F2EFE8',     // Hairline separator
-  borderDark: '#D5CFBE',      // Defined contour border
+  border: '#E5E7EB',          // Clean light neutral border
+  borderLight: '#F3F4F6',     // Hairline separator
+  borderDark: '#D1D5DB',      // Defined contour border
   
   // Form Controls & Inputs
   inputBg: '#FFFFFF',         // Crisp white input
-  inputBgCream: '#FAF8F0',    // Secondary input surface
-  inputBorder: '#DCD8C8',     // Soft neutral input border
+  inputBgCream: '#FFFFFF',    // Clean white input surface
+  inputBorder: '#D1D5DB',     // Clean neutral input border
   inputFocusBorder: '#65B32E',// Brand green input focus border
   
   // Interactive & Selected States

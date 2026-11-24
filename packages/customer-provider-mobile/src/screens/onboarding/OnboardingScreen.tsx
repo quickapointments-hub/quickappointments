@@ -76,7 +76,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
           <div className="relative z-10 w-36 h-36 flex flex-col items-center justify-end overflow-hidden">
             {/* Head & Hair */}
             <div className="relative w-16 h-16 rounded-full bg-[#1B5E20] border-4 border-[#1B5E20] overflow-hidden mb-1">
-              <div className="absolute top-3 inset-x-0 mx-auto w-10 h-10 rounded-full bg-[#F5F2E6]" />
+              <div className="absolute top-3 inset-x-0 mx-auto w-10 h-10 rounded-full bg-[#FFFFFF]" />
             </div>
             {/* Collar & Apron */}
             <div className="w-28 h-16 rounded-t-3xl bg-[#E8F6E4] border-4 border-[#1B5E20] border-b-0 flex flex-col items-center pt-1">
@@ -145,7 +145,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
   const active = slides[currentSlide];
 
   return (
-    <div className="relative min-h-full h-full flex flex-col justify-between p-6 bg-[#FDFCF4] text-[#111111] overflow-hidden select-none">
+    <div className="relative min-h-full h-full flex flex-col justify-between p-6 bg-[#FFFFFF] text-[#111111] overflow-hidden select-none">
       {/* Top Header: Logo & Skip */}
       <div className="pt-2 flex items-center justify-between relative z-10">
         <div className="w-12" />

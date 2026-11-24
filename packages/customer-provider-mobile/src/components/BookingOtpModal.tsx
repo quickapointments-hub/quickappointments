@@ -60,7 +60,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm bg-[#FDFCF4] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
+      <div className="w-full max-w-sm bg-[#FFFFFF] rounded-3xl p-6 shadow-2xl border border-[#E8E4D9] text-[#111111] space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#E8E4D9]">
           <div>
@@ -127,7 +127,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
                   key={i}
                   type="button"
                   onClick={handleDelete}
-                  className="py-3 text-xs font-bold rounded-2xl bg-white border border-[#E8E4D9] hover:bg-[#FAF8F0] text-[#4B5563] transition-all cursor-pointer"
+                  className="py-3 text-xs font-bold rounded-2xl bg-white border border-[#E8E4D9] hover:bg-[#FFFFFF] text-[#4B5563] transition-all cursor-pointer"
                 >
                   DEL
                 </button>
@@ -138,7 +138,7 @@ export const BookingOtpModal: React.FC<BookingOtpModalProps> = ({
                 key={i}
                 type="button"
                 onClick={() => handleKeyPress(key)}
-                className="py-3 text-base font-bold font-mono rounded-2xl bg-white hover:bg-[#FAF8F0] border border-[#E8E4D9] text-[#111111] transition-all cursor-pointer shadow-sm"
+                className="py-3 text-base font-bold font-mono rounded-2xl bg-white hover:bg-[#FFFFFF] border border-[#E8E4D9] text-[#111111] transition-all cursor-pointer shadow-sm"
               >
                 {key}
               </button>
